@@ -26,7 +26,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 
 DEFAULT_TARGETS = "config/targets.json"
-DECISION_VERSION = "phase4-v1"
+DECISION_VERSION = "phase4-v2"
 
 
 # Candidate skills derived from the two shipped base resumes. The fit helper
@@ -333,7 +333,11 @@ def summarize_reasoning(status: str, reasons: List[str], score: int) -> str:
 
 def evaluate_fit(job: dict, targets: dict) -> dict:
     title = normalize_text(pick_text(job, "title"))
-    jd_text = normalize_text(pick_text(job, "jd_text", "description", "job_description"))
+    # Keep an un-normalized copy for the section/sentence-aware detectors:
+    # the preferred-qualifications splitter and sentence_window need the
+    # original newlines that normalize_text collapses away.
+    jd_raw = pick_text(job, "jd_text", "description", "job_description")
+    jd_text = normalize_text(jd_raw)
     location = normalize_text(pick_text(job, "location"))
     role_type = normalize_text(pick_text(job, "role_type"))
     internship_term = normalize_text(pick_text(job, "internship_term"))
@@ -362,7 +366,7 @@ def evaluate_fit(job: dict, targets: dict) -> dict:
         matched_level_keyword = find_first_keyword(jd_lower, level_keywords)
         matched_level_source = "jd" if matched_level_keyword else ""
 
-    years_required = parse_years_required(title, jd_text, role_type, internship_term)
+    years_required = parse_years_required(title, jd_raw, role_type, internship_term)
     fit_reasons: List[str] = []
 
     # Deterministic hard rejects first.
@@ -403,7 +407,7 @@ def evaluate_fit(job: dict, targets: dict) -> dict:
             years_required=years_required,
         )
 
-    if advanced_degree_required(jd_text):
+    if advanced_degree_required(jd_raw):
         fit_reasons.append("JD requires a Master's/PhD level degree without a pursuing/in-progress exception.")
         return build_result(
             fit_status="skipped_unfit",
@@ -415,7 +419,7 @@ def evaluate_fit(job: dict, targets: dict) -> dict:
             years_required=years_required,
         )
 
-    if clearance_required(jd_text):
+    if clearance_required(jd_raw):
         fit_reasons.append("JD requires an active security clearance rather than only the ability to obtain one.")
         return build_result(
             fit_status="skipped_unfit",
