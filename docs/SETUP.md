@@ -128,7 +128,7 @@ file. Additions are code changes: verify the endpoint by hand, update
 `verified_at`, and review in a PR. Nothing is ever pulled from a
 remote source at run time.
 
-## 3.2 TUI overlay (Phase 13, optional)
+### 3.2 TUI overlay (Phase 13, optional)
 
 A terminal UI over the same configs and helpers, in `app/`. It never
 writes state JSON directly — every mutation goes through the repo's

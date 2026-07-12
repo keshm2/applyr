@@ -1,32 +1,39 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { AresState } from "../state.js";
+import { theme } from "../theme.js";
 
 interface Props {
   state: AresState;
   lastRun: string;
   sessionLog?: string;
   unresolvedQueue: number;
+  /** Inside the persistent app the shell owns the title and hints. */
+  embedded?: boolean;
 }
 
-export function StatusScreen({ state, lastRun, sessionLog, unresolvedQueue }: Props) {
+export function StatusScreen({ state, lastRun, sessionLog, unresolvedQueue, embedded }: Props) {
   const counts = { applied: 0, needs_review: 0, failed: 0 };
   for (const job of state.applied) {
     if (job.status in counts) counts[job.status as keyof typeof counts] += 1;
   }
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <Text bold color="cyan">
-        Ares — status
-      </Text>
+    <Box flexDirection="column" paddingX={embedded ? 0 : 1}>
+      {embedded ? (
+        <Text bold>Status</Text>
+      ) : (
+        <Text bold color={theme.accent}>
+          Ares — status
+        </Text>
+      )}
       <Box marginTop={1} flexDirection="column">
         <Text>
-          Applied <Text color="green">{counts.applied}</Text> · Needs review{" "}
-          <Text color="yellow">{counts.needs_review}</Text> · Failed{" "}
-          <Text color="red">{counts.failed}</Text>
+          Applied <Text color={theme.good}>{counts.applied}</Text> · Needs review{" "}
+          <Text color={theme.warn}>{counts.needs_review}</Text> · Failed{" "}
+          <Text color={theme.danger}>{counts.failed}</Text>
         </Text>
         <Text>
-          Review queue: <Text color="yellow">{unresolvedQueue}</Text> pending · Registry:{" "}
+          Review queue: <Text color={theme.warn}>{unresolvedQueue}</Text> pending · Registry:{" "}
           {state.registry.length} jobs seen
         </Text>
       </Box>
@@ -34,11 +41,11 @@ export function StatusScreen({ state, lastRun, sessionLog, unresolvedQueue }: Pr
         <Text dimColor>Last run: {lastRun}</Text>
         {sessionLog ? <Text dimColor>Latest session log: {sessionLog}</Text> : null}
       </Box>
-      <Box marginTop={1}>
-        <Text dimColor>
-          Commands: ares run · ares review · ares history · ares setup [--check]
-        </Text>
-      </Box>
+      {embedded ? null : (
+        <Box marginTop={1}>
+          <Text dimColor>Open the app with: ares (screens: status · review · history · run)</Text>
+        </Box>
+      )}
     </Box>
   );
 }

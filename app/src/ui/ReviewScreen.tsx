@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from "react";
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useInput } from "ink";
 import { loadState, isResolved, registryByJobId, todayIso } from "../state.js";
 import type { AresState, QueueEntry, AppliedJob } from "../state.js";
 import { appendAppliedJob, recordEvent, openUrl, helperError } from "../helpers.js";
+import { theme } from "../theme.js";
 
 interface Props {
   root: string;
+  /** Only the focused tab receives keys (and never on piped stdin). */
+  active: boolean;
 }
 
 /**
@@ -13,8 +16,7 @@ interface Props {
  * outcomes through the helpers (applied_jobs append + registry event) and
  * derives "resolved" instead of deleting entries.
  */
-export function ReviewScreen({ root }: Props) {
-  const { exit } = useApp();
+export function ReviewScreen({ root, active }: Props) {
   const [state, setState] = useState<AresState>(() => loadState(root));
   const [cursor, setCursor] = useState(0);
   const [showResolved, setShowResolved] = useState(false);
@@ -73,46 +75,54 @@ export function ReviewScreen({ root }: Props) {
     setMessage(`Dismissed: ${entry.company} — ${entry.title}`);
   };
 
-  useInput((input, key) => {
-    if (input === "q" || key.escape) return exit();
-    if (key.upArrow) return setCursor((c) => Math.max(0, c - 1));
-    if (key.downArrow) return setCursor((c) => Math.min(entries.length - 1, c + 1));
-    if (input === "x") return setShowResolved((s) => !s);
-    if (!selected) return;
-    try {
-      if (input === "o") {
-        openUrl(selected.url);
-        setMessage(`Opened ${selected.url}`);
-      } else if (input === "a") {
-        markApplied(selected);
-        refresh();
-      } else if (input === "d") {
-        dismiss(selected);
-        refresh();
+  useInput(
+    (input, key) => {
+      if (key.upArrow || input === "k") return setCursor((c) => Math.max(0, c - 1));
+      if (key.downArrow || input === "j")
+        return setCursor((c) => Math.min(entries.length - 1, c + 1));
+      if (input === "x") return setShowResolved((s) => !s);
+      if (!selected) return;
+      try {
+        if (input === "o") {
+          openUrl(selected.url);
+          setMessage(`Opened ${selected.url}`);
+        } else if (input === "a") {
+          markApplied(selected);
+          refresh();
+        } else if (input === "d") {
+          dismiss(selected);
+          refresh();
+        }
+      } catch (err) {
+        setMessage(helperError(err));
       }
-    } catch (err) {
-      setMessage(helperError(err));
-    }
-  });
+    },
+    { isActive: active && Boolean(process.stdin.isTTY) },
+  );
 
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <Text bold color="cyan">
-        Ares — review queue ({entries.length} {showResolved ? "total" : "pending"})
+    <Box flexDirection="column">
+      <Text bold>
+        Review queue{" "}
+        <Text dimColor>
+          ({entries.length} {showResolved ? "total" : "pending"})
+        </Text>
       </Text>
       <Box flexDirection="column" marginTop={1}>
         {entries.length === 0 ? (
           <Text dimColor>Nothing to review.</Text>
         ) : (
-          entries.slice(0, 15).map((entry, i) => {
+          entries.slice(0, 12).map((entry, i) => {
             const resolved = isResolved(state, entry);
-            return (
-              <Text key={`${entry.job_id}-${i}`} inverse={i === cursor}>
-                {resolved ? "✓ " : "• "}
-                {entry.company} — {entry.title}
-                {typeof entry.ats_score === "number" ? ` (ats ${entry.ats_score})` : ""}
-                {resolved ? "  [resolved]" : ""}
+            const row = `${resolved ? "✓" : "•"} ${entry.company} — ${entry.title}${
+              typeof entry.ats_score === "number" ? `  (ats ${entry.ats_score})` : ""
+            }${resolved ? "  [resolved]" : ""}`;
+            return i === cursor ? (
+              <Text key={`${entry.job_id}-${i}`} color={theme.accent} inverse>
+                {row}
               </Text>
+            ) : (
+              <Text key={`${entry.job_id}-${i}`}>{row}</Text>
             );
           })
         )}
@@ -125,12 +135,11 @@ export function ReviewScreen({ root }: Props) {
       ) : null}
       {message ? (
         <Box marginTop={1}>
-          <Text color="yellow">{message}</Text>
+          <Text color={theme.warn}>{message}</Text>
         </Box>
       ) : null}
-      <Box marginTop={1}>
-        <Text dimColor>↑/↓ select · o open · a mark applied · d dismiss · x show resolved · q quit</Text>
-      </Box>
     </Box>
   );
 }
+
+export const REVIEW_HINTS = "↑/↓ select · o open · a applied · d dismiss · x resolved";
