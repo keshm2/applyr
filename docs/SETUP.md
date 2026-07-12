@@ -162,6 +162,23 @@ Commands:
 - `ares run` — trigger `scripts/run_job_agent.sh` and stream the
   session log.
 
+**Modes.** The app always launches in **manual mode**. Press `m` to
+toggle between manual and automatic; the active mode is always visible
+in the shell.
+
+- **Manual mode (default on launch)** — human-driven job search: a
+  Search screen fetches live postings from the configured boards, lets
+  you filter by a typed query, open a posting in the browser, run the
+  fit gate on a selected posting, and save it to the review queue.
+  The only state writes are the save action (needs_review records
+  through the helpers).
+- **Automatic mode** — agent-driven cycle: before a run can start you
+  must enter how many applications this cycle may submit (1–25). The
+  runner receives the count as `ARES_SESSION_CAP` and the run prompt
+  carries the per-cycle cap. The cap can lower, never raise, the
+  25-per-session maximum; `run_job_agent.sh` clamps any value above
+  25 down to 25 and falls back to 25 on invalid or below-1 input.
+
 npm publication (`npx`-based first run) is deferred until the package
 name and scope are settled — for now install from the repo as above.
 

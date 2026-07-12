@@ -26,11 +26,18 @@ export async function runAgent(root: string): Promise<number> {
     }
   }, 500);
 
-  const code: number = await new Promise((resolve) => {
-    child.on("close", (c) => resolve(c ?? 1));
-  });
-  clearInterval(poll);
-  tail?.kill();
-  console.log(code === 0 ? "\nRun complete." : `\nRun exited with code ${code} — see logs/run_job_agent.log.`);
-  return code;
+  try {
+    const code: number = await new Promise<number>((resolve, reject) => {
+      child.on("close", (c) => resolve(c ?? 1));
+      child.on("error", reject);
+    });
+    console.log(code === 0 ? "\nRun complete." : `\nRun exited with code ${code} — see logs/run_job_agent.log.`);
+    return code;
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    return 1;
+  } finally {
+    clearInterval(poll);
+    tail?.kill();
+  }
 }

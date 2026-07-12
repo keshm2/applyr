@@ -1,7 +1,7 @@
 {
   "name": "ares-apply",
   "version": "0.1.0",
-  "description": "Terminal UI overlay for the Ares job-application agent — setup wizard, run, status, review-queue triage, and history over the Python core.",
+  "description": "Terminal UI overlay for Ares — manual job search, automatic runs, review triage, status, and history over the Python core.",
   "license": "MIT",
   "type": "module",
   "bin": {

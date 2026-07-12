@@ -139,9 +139,26 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 SESSION_LOG="logs/session_${TIMESTAMP}.log"
 echo "run_job_agent: start $(date -u +%Y-%m-%dT%H:%M:%SZ) harness=$HARNESS" >> "$SESSION_LOG"
 
+# --- Per-session application cap (Phase 13 TUI modes) ------------------------
+# ARES_SESSION_CAP lets the TUI's automatic mode lower the per-session
+# application cap. Default 25 (the hard maximum). Values above 25 clamp
+# down to 25; values below 1 or non-integer fall back to 25 with a
+# warning so a misconfigured env never blocks the run.
+SESSION_CAP="${ARES_SESSION_CAP:-25}"
+if ! [[ "$SESSION_CAP" =~ ^[0-9]+$ ]]; then
+  echo "[$(date)] WARNING: ARES_SESSION_CAP='$SESSION_CAP' is not an integer; using default 25" >> "$RUN_LOG"
+  SESSION_CAP=25
+elif [ "$SESSION_CAP" -gt 25 ]; then
+  echo "[$(date)] WARNING: ARES_SESSION_CAP=$SESSION_CAP exceeds the maximum; clamping to 25" >> "$RUN_LOG"
+  SESSION_CAP=25
+elif [ "$SESSION_CAP" -lt 1 ]; then
+  echo "[$(date)] WARNING: ARES_SESSION_CAP=$SESSION_CAP is below 1; using default 25" >> "$RUN_LOG"
+  SESSION_CAP=25
+fi
+
 RUN_PROMPT="Start a new job application run. Read AGENTS.md, load data/applied_jobs.json
    and config/targets.json, scrape all configured job boards, deduplicate,
-   tailor and apply to matching roles within the session cap, and send a
+   tailor and apply to at most ${SESSION_CAP} jobs this session (session cap ${SESSION_CAP} of the 25 maximum), and send a
    Discord summary when complete."
 
 echo "[$(date)] Starting run via harness: $HARNESS" >> "$RUN_LOG"

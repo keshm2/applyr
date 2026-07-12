@@ -12,7 +12,7 @@ const HELP = `ares — persistent TUI for the Ares job-application agent
 
 Usage: ares [command]
 
-  (no command)      open the app (status · review · history · run)
+  (no command)      open the app (status · jobs · review · history)
   review | history  open the app on that screen
   status            one-shot pipeline overview (scripting/CI friendly)
   run               trigger a run in the current terminal (no app shell)
@@ -22,14 +22,30 @@ Usage: ares [command]
 State writes go through the repo's Python/bash helpers — the TUI never
 edits state JSON directly. Set ARES_ROOT to run outside the repo.`;
 
+/** Ensure non-TTY stdout has flushed so process.exit() doesn't truncate
+ *  piped/CI output from one-shot renders. */
+function flushStdout(): Promise<void> {
+  return new Promise((resolve) => {
+    const out = process.stdout;
+    if (out.isTTY || !out.writableNeedDrain) {
+      resolve();
+      return;
+    }
+    out.once("drain", () => resolve());
+  });
+}
+
 /** Alternate screen: full-screen app without scrollback pollution, and
  * the terminal restored on any exit path (quit, error, Ctrl-C). */
 async function openApp(root: string, initialTab: Tab): Promise<number> {
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   if (!interactive) {
-    // Piped/CI: render one frame and leave.
+    // Piped/CI: render one frame, wait for the unmount lifecycle to flush,
+    // then leave.
     const app = render(<App root={root} initialTab={initialTab} />);
     app.unmount();
+    await app.waitUntilExit();
+    await flushStdout();
     return 0;
   }
   const enter = "\x1b[?1049h\x1b[H";
@@ -75,6 +91,8 @@ async function main(): Promise<number> {
         />,
       );
       app.unmount();
+      await app.waitUntilExit();
+      await flushStdout();
       return 0;
     }
     case "run":

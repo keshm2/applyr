@@ -28,6 +28,7 @@ export interface RegistryRecord {
   title?: string;
   latest_status?: string;
   url?: string;
+  internship_term?: string;
 }
 
 export interface AresState {
@@ -73,7 +74,36 @@ export function isResolved(state: AresState, entry: QueueEntry): boolean {
   );
   if (outcome) return true;
   const rec = registryByJobId(state.registry, entry.job_id);
-  return rec?.latest_status === "applied" || rec?.latest_status === "skipped_unfit";
+  return (
+    rec?.latest_status === "applied" ||
+    rec?.latest_status === "failed" ||
+    rec?.latest_status === "skipped_unfit"
+  );
+}
+
+/**
+ * A queue entry has a terminal applied/failed outcome when an
+ * applied_jobs entry records that status, or the registry's
+ * latest_status is applied or failed. Used to guard dismiss() from
+ * overwriting a real outcome with skipped_unfit.
+ */
+export function hasAppliedOrFailed(state: AresState, entry: QueueEntry): boolean {
+  const outcome = state.applied.find(
+    (a) => a.job_id === entry.job_id && (a.status === "applied" || a.status === "failed"),
+  );
+  if (outcome) return true;
+  const rec = registryByJobId(state.registry, entry.job_id);
+  return rec?.latest_status === "applied" || rec?.latest_status === "failed";
+}
+
+/**
+ * A queue entry is already dismissed when its registry latest_status is
+ * skipped_unfit. Used by dismiss() to avoid re-dismissing (and recording a
+ * duplicate skipped_unfit event for) an entry already resolved as dismissed.
+ */
+export function isDismissed(state: AresState, entry: QueueEntry): boolean {
+  const rec = registryByJobId(state.registry, entry.job_id);
+  return rec?.latest_status === "skipped_unfit";
 }
 
 export interface Heartbeat {

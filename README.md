@@ -12,11 +12,13 @@ split keeps every state-mutating step auditable and means the agent
 itself never hand-writes runtime state. Each run is capped at **25
 applications** to stay polite to upstream boards and rate limits.
 
-> **Status** — Phases 0–8 of the phased build are implemented and
-> described under [What ships today](#what-ships-today). Phase 9
-> is planned. Later productization ideas (browser extension, hosted
-> accounts, TUI/web apps) are tracked in the planning document and are
-> **not** implemented.
+> **Status** — Phases 0–8 are implemented and described under
+> [What ships today](#what-ships-today). The Phase 13 TUI overlay is
+> **partial**: the manual/automatic-mode app works from the local
+> repo (see [Terminal UI overlay](#terminal-ui-overlay-phase-13-partial)),
+> while `npm` publication, provider-setup, and hosted storage are
+> deferred. Phase 9 is planned; the browser extension and hosted
+> accounts are still future work tracked in the planning document.
 
 ## At a glance
 
@@ -40,8 +42,9 @@ For each run, Ares:
 4. **Fit-gates** each canonical job with a deterministic helper
    (role/level keywords, years of experience, location).
 5. **Tailors** a resume and cover letter for jobs that pass the gate.
-6. **Submits** applications via a Playwright-controlled browser, or
-   directly against the public Ashby and Lever JSON APIs.
+6. **Submits** applications through a Playwright-controlled browser.
+   The public Ashby and Lever JSON APIs are used for job discovery,
+   not application submission.
 7. **Records** the outcome locally, fires the right Discord webhook,
    and (for successful applications only) appends one row to the
    Google Sheet tracker.
@@ -54,7 +57,10 @@ For each run, Ares:
 
 ## What ships today
 
-Phases 0–8 of the project roadmap are implemented:
+Phases 0–8 of the project roadmap are implemented. Phase 13 is
+partial — the TUI overlay works from the local repo while `npm`
+publication, provider-setup, and hosted storage remain deferred
+(detailed below).
 
 - **State and config hardening (phase 0).** `.gitignore` excludes all
   live configs, runtime state, PII, browser artifacts, logs, and Python
@@ -111,6 +117,14 @@ Phases 0–8 of the project roadmap are implemented:
   `config/lever_vetted_slugs.json`, so a fresh clone has real board
   coverage on the first run. A non-placeholder value is never
   overwritten, and every seeded array prints a visible warning.
+- **Terminal UI overlay (phase 13, partial).** A TypeScript TUI in
+  `app/` (Ink + React) provides a full-screen shell for browsing
+  state, triaging the review queue, manual job search, and
+  triggering runs. The Python/bash helpers remain the sole
+  authoritative state writers — the TUI never edits state JSON
+  directly. `npm` publication, provider-setup, and hosted storage
+  are deferred — install from the local repo. Full details:
+  [Terminal UI overlay](#terminal-ui-overlay-phase-13-partial).
 
 ## Pipeline
 
@@ -220,6 +234,26 @@ Key files and entry points:
   is disabled or unconfigured; never turns a successful application
   into a failure.
 
+**TUI overlay** (`app/`, phase 13 partial)
+
+- `cli.js` (built from `src/cli.tsx`) — entry point. Subcommands:
+  `setup [--check]`, `status`, `review`, `history`, `run`. Set
+  `ARES_ROOT` to run outside the repo.
+- `src/ui/App.tsx` — persistent shell: tab row, content region,
+  hint bar. Tabs are Status, Jobs, Review, History. The Jobs tab
+  switches between manual and automatic mode (`m` toggles).
+- `src/ui/SearchScreen.tsx` — manual Jobs mode. Live configured
+  Ashby / Lever / Workday search, typed query, browser open,
+  deterministic fit check, helper-backed save to review.
+- `src/ui/RunScreen.tsx` — automatic Jobs mode. Per-cycle
+  application cap (1–25) → `ARES_SESSION_CAP` → spawns
+  `scripts/run_job_agent.sh` and tails the session log.
+
+State-write discipline is the same as the rest of the project — the
+TUI never edits state JSON directly. See
+[Terminal UI overlay](#terminal-ui-overlay-phase-13-partial) for the
+user-facing walkthrough.
+
 **Config templates** (`config/`)
 
 - `targets.example.json` — role/level/season keywords, preferred
@@ -276,11 +310,78 @@ service-account JSON key at `config/service-account-key.json`, share
 the sheet with the service-account email, and validate again. Full
 steps are in `docs/SETUP.md` §4.
 
+## Terminal UI overlay (Phase 13, partial)
+
+The TypeScript TUI in `app/` runs over the same configs and
+Python/bash helpers that drive the cron entry point. The Python
+helpers and `scripts/append_state_entry.sh` remain the sole
+authoritative state writers — the TUI shells out to them for every
+mutation and never edits state JSON directly. The review-queue file
+stays append-only: the TUI's triage records outcomes (`applied_jobs`
+append + `record-event`) and derives "resolved" from them.
+
+> This is **working but still an alpha** with kinks being refined.
+> `npm` publication, provider-setup, and hosted storage are
+> deferred — install from the local repo (see below). Workday is
+> review-only and requires configured tenants in
+> `config/targets.json` to surface postings; without tenants, the
+> board reports as off.
+
+**Prerequisite:** Node.js 18+ (matches `app/package.json` engines).
+
+**Install and run from the repo:**
+
+```bash
+cd app
+npm install
+npm run build
+npm link        # exposes the `ares` command on your PATH
+ares            # or: node dist/cli.js (no `npm link` required)
+```
+
+**Screens** (number keys or `tab` / `shift+tab` to switch):
+
+1. **Status** — outcome counts, pending review queue, last run.
+2. **Jobs** — manual or automatic mode (see below).
+3. **Review** — triage the review queue.
+4. **History** — browse recorded outcomes.
+
+**Modes.** The app always launches in **manual mode**. Press `m` to
+toggle between manual and automatic; the active mode is visible in
+the shell.
+
+- **Manual mode** (Jobs screen) — live configured Ashby / Lever /
+  Workday search with a typed title query, browser open, the
+  deterministic JD fit gate, and helper-backed save to review.
+- **Automatic mode** (Jobs screen) — before a run can start you must
+  enter how many applications this cycle may submit (1–25). The
+  runner receives the count as `ARES_SESSION_CAP` and the run prompt
+  carries the per-cycle cap. The cap can lower, never raise, the
+  25-per-session maximum.
+
+**Essential controls** (each screen also displays contextual hints
+in the hint bar):
+
+- `q` — quit; `Esc` releases an active query/count field, then quits
+  when the shell owns keyboard focus
+- `R` — refresh state from disk
+- `m` — toggle manual / automatic mode
+- `1`–`4` or `tab` / `shift+tab` — switch screens
+- Manual Jobs: `/` edit query · `o` open posting · `f` run fit
+  gate · `s` save to review
+- Automatic Jobs: `enter` set cap · `esc` release · `e` edit cap ·
+  `s` start run
+
+Detailed walkthrough, including the `ares setup` / `ares review` /
+`ares history` / `ares run` subcommands, lives in
+[`docs/SETUP.md`](./docs/SETUP.md) §3.2.
+
 ## Roadmap
 
 Ares is a phased build-out. **Phases 0–8 are implemented** and
-described under [What ships today](#what-ships-today). **Phase 9
-is planned, not yet implemented**.
+described under [What ships today](#what-ships-today). **Phase 13 is
+partial** — see [Terminal UI overlay](#terminal-ui-overlay-phase-13-partial).
+**Phase 9 is planned, not yet implemented**.
 
 | Phase | Status | Scope |
 | --- | --- | --- |
@@ -294,7 +395,8 @@ is planned, not yet implemented**.
 | 7 — Workday review-only support | Shipped | `fetch_workday_listings.py` (public CXS JSON) + fit gate; promising jobs routed to `needs_review`, no auto-apply |
 | 8 — Scheduler upgrade | Shipped | `scheduler.sh` (launchd, 30-min 24/7), skip-on-overlap, heartbeat + health marker |
 | 9 — Migration-friendliness review | Planned | document per-user vs. project-owned seams; stays single-user |
-| Productization (extension, accounts, TUI, web) | Future | tracked in the planning document. **No implementation work authorized.** |
+| 13 — TUI overlay (partial) | Partial | `app/` (Ink + React) — manual/automatic modes, review triage, status/history. `npm` publication, provider-setup, and hosted storage deferred. |
+| Productization (extension, hosted accounts) | Future | browser extension and hosted accounts tracked in the planning document. **No implementation work authorized.** |
 
 > Phase-by-phase acceptance criteria, current state, and what to avoid
 > are tracked in [`docs/PLAN.md`](./docs/PLAN.md). **Read

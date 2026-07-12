@@ -3,9 +3,10 @@
 ## Phase status (keep in sync with docs/PLAN.md's Phase Status Pointer)
 - **Last completed phase:** Phase 8 — scheduler upgrade (2026-07-12).
   Phases 0–8 are DONE; phases 13 and 15 are partially done.
-- **Implement next:** the TUI manual/automatic modes work item
-  (docs/PLAN.md §3.14 — operator pre-authorized), then phase 10
-  (browser extension).
+- **Completed work item:** TUI manual/automatic modes (2026-07-12).
+- **Implement next:** phase 10 — browser extension (docs/PLAN.md
+  §3.11). Phase 13 remains partial for its deferred publication,
+  provider-setup, and hosted-storage items.
 - Whoever closes a phase or work item MUST update this block and the
   matching pointer at the top of docs/PLAN.md before stopping.
 
@@ -21,7 +22,13 @@
   during tailoring): append a needs_review entry so future runs do not
   re-tailor the same job forever. skipped_unfit is local-only and must
   never be written to applied_jobs.json.
-- Max 25 applications per session (rate limit protection).
+- Max 25 applications per session (rate limit protection). The TUI's
+  automatic mode may lower this per run via ARES_SESSION_CAP (1–25);
+  the cap can never exceed 25. scripts/run_job_agent.sh reads
+  ARES_SESSION_CAP (default 25), clamps values above 25 down to 25,
+  and falls back to 25 on invalid or below-1 input, then injects the
+  effective cap into the run prompt so the orchestrator is explicitly
+  told the per-session limit.
 - Never store passwords, SSNs, or payment info anywhere. If a form requests
   these and they aren't in config/targets.json under "safe_fields", skip the
   job, log it to data/review_queue.json via the state helper (see File
