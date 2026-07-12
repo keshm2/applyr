@@ -100,6 +100,35 @@ file. Additions are code changes: verify the endpoint by hand, update
 `verified_at`, and review in a PR. Nothing is ever pulled from a
 remote source at run time.
 
+## 3.2 TUI overlay (Phase 13, optional)
+
+A terminal UI over the same configs and helpers, in `app/`. It never
+writes state JSON directly — every mutation goes through the repo's
+helpers.
+
+```bash
+cd app
+npm install
+npm run build
+node dist/cli.js help      # or: npm link && ares help
+```
+
+Commands:
+
+- `ares setup` — interactive wizard that writes `config/targets.json`
+  and `config/discord_config.json` (the same files sections 1–2
+  create by hand), then runs the validator. `ares setup --check`
+  validates only.
+- `ares status` — outcome counts, pending review queue, last run.
+- `ares review` — triage the review queue: open the posting, mark
+  applied, or dismiss (recorded via the state helpers).
+- `ares history` — browse recorded outcomes.
+- `ares run` — trigger `scripts/run_job_agent.sh` and stream the
+  session log.
+
+npm publication (`npx`-based first run) is deferred until the package
+name and scope are settled — for now install from the repo as above.
+
 ## 4. Google Sheets sync (Phase 3, optional)
 
 The agent can append every successful application to a Google Sheet

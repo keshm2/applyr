@@ -279,6 +279,16 @@
   `python3 scripts/job_state.py record-event '<event-json>'`
   See "Canonical registry and event log" above for the full flow.
 
+## TUI surface (phase 13)
+- The TypeScript TUI in app/ is a rendering/orchestration overlay only.
+  The Python/bash helpers remain the sole authoritative state writers:
+  the TUI shells out to append_state_entry.sh and job_state.py for every
+  state mutation and never edits state JSON directly. A TypeScript port
+  of the core is a separate, explicitly-approved future decision.
+- The review-queue file stays append-only: TUI triage records outcomes
+  (applied_jobs append + record-event) and derives "resolved" from
+  them — it never deletes queue entries.
+
 ## Internship tracker (Google Sheets) sync
 - The Google Sheet internship tracker is a user-facing record of
   successful applications. Sync is one-way (agent → sheet) and
