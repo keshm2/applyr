@@ -76,6 +76,24 @@ export function isResolved(state: AresState, entry: QueueEntry): boolean {
   return rec?.latest_status === "applied" || rec?.latest_status === "skipped_unfit";
 }
 
+export interface Heartbeat {
+  last_run_completed_at: string;
+  last_run_exit_code: number;
+  last_run_counts: Record<string, number>;
+  run_counter: number;
+  consecutive_nonzero_exits: number;
+}
+
+export function readHeartbeat(root: string): Heartbeat | undefined {
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.join(root, "logs", "heartbeat.json"), "utf8"),
+    ) as Heartbeat;
+  } catch {
+    return undefined;
+  }
+}
+
 export function lastRunLine(root: string): string {
   try {
     const log = fs.readFileSync(path.join(root, "logs", "run_job_agent.log"), "utf8");

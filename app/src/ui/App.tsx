@@ -5,7 +5,7 @@ import { StatusScreen } from "./StatusScreen.js";
 import { ReviewScreen, REVIEW_HINTS } from "./ReviewScreen.js";
 import { HistoryScreen, HISTORY_HINTS } from "./HistoryScreen.js";
 import { RunScreen, RUN_HINTS } from "./RunScreen.js";
-import { loadState, isResolved, lastRunLine, latestSessionLog } from "../state.js";
+import { loadState, isResolved, lastRunLine, latestSessionLog, readHeartbeat } from "../state.js";
 import type { AresState } from "../state.js";
 import { theme } from "../theme.js";
 
@@ -88,6 +88,7 @@ export function App({ root, initialTab = "status" }: { root: string; initialTab?
             lastRun={lastRunLine(root)}
             sessionLog={latestSessionLog(root)}
             unresolvedQueue={unresolved}
+            heartbeat={readHeartbeat(root)}
             embedded
           />
         ) : tab === "review" ? (

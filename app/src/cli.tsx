@@ -2,7 +2,7 @@
 import React from "react";
 import { render } from "ink";
 import { findProjectRoot } from "./project.js";
-import { loadState, isResolved, lastRunLine, latestSessionLog } from "./state.js";
+import { loadState, isResolved, lastRunLine, latestSessionLog, readHeartbeat } from "./state.js";
 import { App, type Tab } from "./ui/App.js";
 import { StatusScreen } from "./ui/StatusScreen.js";
 import { runWizard } from "./wizard.js";
@@ -71,6 +71,7 @@ async function main(): Promise<number> {
           lastRun={lastRunLine(root)}
           sessionLog={latestSessionLog(root)}
           unresolvedQueue={unresolved}
+          heartbeat={readHeartbeat(root)}
         />,
       );
       app.unmount();

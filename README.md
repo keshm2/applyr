@@ -12,9 +12,9 @@ split keeps every state-mutating step auditable and means the agent
 itself never hand-writes runtime state. Each run is capped at **25
 applications** to stay polite to upstream boards and rate limits.
 
-> **Status** — Phases 0–7 of the phased build are implemented and
-> described under [What ships today](#what-ships-today). Phases 8–9
-> are planned. Later productization ideas (browser extension, hosted
+> **Status** — Phases 0–8 of the phased build are implemented and
+> described under [What ships today](#what-ships-today). Phase 9
+> is planned. Later productization ideas (browser extension, hosted
 > accounts, TUI/web apps) are tracked in the planning document and are
 > **not** implemented.
 
@@ -54,7 +54,7 @@ For each run, Ares:
 
 ## What ships today
 
-Phases 0–7 of the project roadmap are implemented:
+Phases 0–8 of the project roadmap are implemented:
 
 - **State and config hardening (phase 0).** `.gitignore` excludes all
   live configs, runtime state, PII, browser artifacts, logs, and Python
@@ -94,6 +94,15 @@ Phases 0–7 of the project roadmap are implemented:
   needs-review Discord webhook for manual application — **no
   auto-apply path exists for Workday**, and review items don't count
   against the session cap.
+- **Always-on scheduler (phase 8).** `scripts/scheduler.sh` installs a
+  launchd user agent running the pipeline every 30 minutes, 24/7. A
+  tick that lands mid-run logs `skipped_overlap` and exits cleanly (no
+  second agent); dead locks are reclaimed immediately and hung runs
+  past 60 minutes are terminated and reclaimed. Every run emits a
+  machine-parseable health marker and updates `logs/heartbeat.json`
+  (outcome counts, run counter, consecutive-failure streak — also
+  surfaced on the TUI status screen). Session logs are pruned to the
+  newest 30.
 - **Vetted Ashby/Lever slug auto-seeding (phase 6).** When
   `ashby_company_slugs` / `lever_company_slugs` are unset, empty, or
   placeholder-only, `scripts/seed_vetted_slugs.py` (run by the config
@@ -269,9 +278,9 @@ steps are in `docs/SETUP.md` §4.
 
 ## Roadmap
 
-Ares is a phased build-out. **Phases 0–7 are implemented** and
-described under [What ships today](#what-ships-today). **Phases 8–9
-are planned, not yet implemented**.
+Ares is a phased build-out. **Phases 0–8 are implemented** and
+described under [What ships today](#what-ships-today). **Phase 9
+is planned, not yet implemented**.
 
 | Phase | Status | Scope |
 | --- | --- | --- |
@@ -283,7 +292,7 @@ are planned, not yet implemented**.
 | 5 — SimplifyJobs ingestion | Shipped | `fetch_simplify_listings.py` + JD enrichment before the fit gate; docs cleanup |
 | 6 — Vetted Ashby/Lever slug auto-seeding | Shipped | `seed_vetted_slugs.py` + `config/{ashby,lever}_vetted_slugs.json`, wired into the validator |
 | 7 — Workday review-only support | Shipped | `fetch_workday_listings.py` (public CXS JSON) + fit gate; promising jobs routed to `needs_review`, no auto-apply |
-| 8 — Scheduler upgrade | Planned | 30-minute 24/7 cadence with overlap protection and heartbeat |
+| 8 — Scheduler upgrade | Shipped | `scheduler.sh` (launchd, 30-min 24/7), skip-on-overlap, heartbeat + health marker |
 | 9 — Migration-friendliness review | Planned | document per-user vs. project-owned seams; stays single-user |
 | Productization (extension, accounts, TUI, web) | Future | tracked in the planning document. **No implementation work authorized.** |
 

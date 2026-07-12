@@ -165,6 +165,42 @@ Commands:
 npm publication (`npx`-based first run) is deferred until the package
 name and scope are settled — for now install from the repo as above.
 
+## 3.5 Always-on schedule (Phase 8, optional)
+
+Run the agent every 30 minutes, 24/7, via a launchd user agent
+(macOS). Overlap protection lives in `run_job_agent.sh` itself: a tick
+that lands while a run is in flight logs `skipped_overlap` and exits 0
+(no second agent), a dead holder's lock is reclaimed immediately, and
+a hung run older than 60 minutes (`ARES_LOCK_MAX_AGE_MIN`) is
+terminated and reclaimed so a wedged run never blocks the schedule.
+
+```bash
+bash scripts/scheduler.sh install     # write + load the plist (a run starts immediately)
+bash scripts/scheduler.sh status      # loaded? + current heartbeat
+bash scripts/scheduler.sh uninstall   # stop the schedule
+bash scripts/scheduler.sh plist       # print the plist without installing
+```
+
+On Linux, create the equivalent systemd user timer by hand
+(`OnUnitActiveSec=30min`, `WorkingDirectory=` the repo root, command
+`/bin/bash scripts/run_job_agent.sh`).
+
+**What to check first when something looks wrong:**
+
+1. `logs/heartbeat.json` — last run's timestamp, exit code, per-run
+   outcome counts, and `consecutive_nonzero_exits` (a growing streak
+   means a restart loop; the schedule keeps ticking either way).
+2. `logs/run_job_agent.log` — one line per tick: the machine-parseable
+   `run_job_agent: complete <ISO> applied=<n> needs_review=<n>
+   failed=<n> skipped_unfit=<n>` health marker, plus
+   `skipped_overlap` / `stale_lock_reclaimed` / `FAILED` entries.
+3. `logs/session_<timestamp>.log` — the full transcript of a specific
+   run (start line, harness, transcript, end marker). Only the newest
+   30 are kept (`ARES_KEEP_SESSION_LOGS`).
+
+The 25-applications-per-session cap is unchanged — the cadence changes
+how often runs happen, never how much one run may apply.
+
 ## 4. Google Sheets sync (Phase 3, optional)
 
 The agent can append every successful application to a Google Sheet

@@ -305,6 +305,17 @@
   `python3 scripts/job_state.py record-event '<event-json>'`
   See "Canonical registry and event log" above for the full flow.
 
+## Scheduler (phase 8)
+- The production cadence is a launchd user agent (macOS) running
+  scripts/run_job_agent.sh every 30 minutes, 24/7 — managed by
+  scripts/scheduler.sh (install|uninstall|status|plist); Linux
+  equivalent documented in docs/SETUP.md 3.5. The runner owns overlap
+  protection (skip-on-overlap, dead-lock reclaim, 60-min hung-run
+  threshold), writes the machine-parseable
+  "run_job_agent: complete ..." health marker, and updates
+  logs/heartbeat.json after every run. The 25-per-session cap is
+  unchanged by the cadence.
+
 ## TUI surface (phase 13)
 - The TypeScript TUI in app/ is a rendering/orchestration overlay only.
   The Python/bash helpers remain the sole authoritative state writers:
