@@ -1,5 +1,14 @@
 # Job Application Agent — Core Rules
 
+## Phase status (keep in sync with docs/PLAN.md's Phase Status Pointer)
+- **Last completed phase:** Phase 8 — scheduler upgrade (2026-07-12).
+  Phases 0–8 are DONE; phases 13 and 15 are partially done.
+- **Implement next:** the TUI manual/automatic modes work item
+  (docs/PLAN.md §3.14 — operator pre-authorized), then phase 10
+  (browser extension).
+- Whoever closes a phase or work item MUST update this block and the
+  matching pointer at the top of docs/PLAN.md before stopping.
+
 ## Critical rules (never break these)
 - ALWAYS read data/applied_jobs.json before starting any application run.
   Never apply to a job whose URL or job_id already exists in that file.
