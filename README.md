@@ -12,8 +12,8 @@ split keeps every state-mutating step auditable and means the agent
 itself never hand-writes runtime state. Each run is capped at **25
 applications** to stay polite to upstream boards and rate limits.
 
-> **Status** — Phases 0–5 of the phased build are implemented and
-> described under [What ships today](#what-ships-today). Phases 6–9
+> **Status** — Phases 0–6 of the phased build are implemented and
+> described under [What ships today](#what-ships-today). Phases 7–9
 > are planned. Later productization ideas (browser extension, hosted
 > accounts, TUI/web apps) are tracked in the planning document and are
 > **not** implemented.
@@ -55,7 +55,7 @@ For each run, Ares:
 
 ## What ships today
 
-Phases 0–5 of the project roadmap are implemented:
+Phases 0–6 of the project roadmap are implemented:
 
 - **State and config hardening (phase 0).** `.gitignore` excludes all
   live configs, runtime state, PII, browser artifacts, logs, and Python
@@ -88,6 +88,14 @@ Phases 0–5 of the project roadmap are implemented:
   orchestrator fetches each surviving candidate's JD from its listing
   URL before the fit gate runs. A missing or placeholder
   `simplify_feeds` config skips the board with a warning.
+- **Vetted Ashby/Lever slug auto-seeding (phase 6).** When
+  `ashby_company_slugs` / `lever_company_slugs` are unset, empty, or
+  placeholder-only, `scripts/seed_vetted_slugs.py` (run by the config
+  validator) seeds them from the project-owned, hand-verified vetted
+  lists in `config/ashby_vetted_slugs.json` and
+  `config/lever_vetted_slugs.json`, so a fresh clone has real board
+  coverage on the first run. A non-placeholder value is never
+  overwritten, and every seeded array prints a visible warning.
 
 ## Pipeline
 
@@ -163,9 +171,9 @@ Key files and entry points:
 - `job-scraper.md` — the orchestrator. Scrapes, canonicalizes, runs
   the fit gate, calls `@resume-tailor`, runs the apply loop, fires
   per-outcome Discord notifications, and fires the batch summary.
-- `resume-tailor.md` — subagent. Selects a base resume
-  (`base_resume_general.md` or `base_resume_cyber.md`), rewrites
-  bullets, writes a cover letter, returns an `ats_score`.
+- `resume-tailor.md` — subagent. Selects one of five base resumes by
+  job category (swe, ai_ml, balanced, cyber, networking_cyber),
+  rewrites bullets, writes a cover letter, returns an `ats_score`.
 - `discord-reporter.md` — subagent. Reads the per-outcome webhook
   routes, JSON-escapes every payload, POSTs with
   `allowed_mentions: parse=[]`. Skips `skipped_unfit`.
@@ -226,9 +234,11 @@ Key files and entry points:
 - `job_events.jsonl` — append-only JSONL event log. One line per
   `record-event` call. The registry is the structured view; the JSONL
   is the audit trail.
-- `resumes/` — `base_resume_general.md` and `base_resume_cyber.md`
-  (with `.pdf` companions). The `@resume-tailor` subagent selects
-  between them.
+- `resumes/` — five base resumes (`base_resume_swe`,
+  `base_resume_ai_ml`, `base_resume_balanced`, `base_resume_cyber`,
+  `base_resume_networking_cyber`) plus `base_cover_letter`, each as
+  `.md` + `.pdf`. The `@resume-tailor` subagent selects among them by
+  job category; `balanced` is the default.
 
 ## Quick start
 
@@ -253,8 +263,8 @@ steps are in `docs/SETUP.md` §4.
 
 ## Roadmap
 
-Ares is a phased build-out. **Phases 0–5 are implemented** and
-described under [What ships today](#what-ships-today). **Phases 6–9
+Ares is a phased build-out. **Phases 0–6 are implemented** and
+described under [What ships today](#what-ships-today). **Phases 7–9
 are planned, not yet implemented**.
 
 | Phase | Status | Scope |
@@ -265,7 +275,7 @@ are planned, not yet implemented**.
 | 3 — Google Sheets sync | Shipped | one append-only row per successful application |
 | 4 — Deterministic JD fit gate | Shipped | `evaluate_job_fit.py`, pre-tailoring and pre-apply |
 | 5 — SimplifyJobs ingestion | Shipped | `fetch_simplify_listings.py` + JD enrichment before the fit gate; docs cleanup |
-| 6 — Vetted Ashby/Lever slug auto-seeding | Planned | populate `config/targets.json` from a project-owned vetted list |
+| 6 — Vetted Ashby/Lever slug auto-seeding | Shipped | `seed_vetted_slugs.py` + `config/{ashby,lever}_vetted_slugs.json`, wired into the validator |
 | 7 — Workday review-only support | Planned | Playwright scrape + fit gate; promising jobs routed to `needs_review`, no auto-apply |
 | 8 — Scheduler upgrade | Planned | 30-minute 24/7 cadence with overlap protection and heartbeat |
 | 9 — Migration-friendliness review | Planned | document per-user vs. project-owned seams; stays single-user |

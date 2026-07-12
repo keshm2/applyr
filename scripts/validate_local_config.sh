@@ -130,6 +130,21 @@ if [ -n "$SUMMARY_URL" ] && [ "$SUMMARY_URL" != "REPLACE_ME" ]; then
     || warn "$DISCORD: webhooks.summary does not look like a Discord webhook URL — summary will fall back to the success webhook at runtime"
 fi
 
+# --- Phase 6: vetted slug auto-seeding (non-fatal) --------------------------
+# Seeds ashby_company_slugs / lever_company_slugs from the project-owned
+# vetted lists (config/*_vetted_slugs.json) when the user's array is unset,
+# empty, or placeholder-only. Never overwrites a non-placeholder value. The
+# seeder prints a visible WARNING for each seeded array; failures here warn
+# and never raise the exit code. Runs before the placeholder warnings below
+# so a freshly seeded config does not also warn about placeholders.
+
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$SCRIPT_DIR/seed_vetted_slugs.py" --targets "$TARGETS" \
+    || warn "vetted slug auto-seeding failed — continuing with existing slug config"
+else
+  warn "python3 not found — vetted slug auto-seeding skipped"
+fi
+
 # --- Placeholder slug warnings (non-fatal) ---------------------------------
 
 placeholder_slugs() {

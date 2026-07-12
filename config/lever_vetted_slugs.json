@@ -1,0 +1,14 @@
+{
+  "_provenance": "Project-owned vetted Lever slug list (Phase 6). Each slug was verified against https://api.lever.co/v0/postings/{slug}?mode=json (HTTP 200 with a non-empty postings array) on the verified_at date. Additions are code changes: verify the endpoint by hand, update verified_at, and review in a PR. This list is never fetched from a remote source at run time.",
+  "verified_at": "2026-07-11",
+  "slugs": [
+    "activecampaign",
+    "octoenergy",
+    "outreach",
+    "palantir",
+    "shieldai",
+    "spotify",
+    "veeva",
+    "zoox"
+  ]
+}

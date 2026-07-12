@@ -25,7 +25,10 @@ In `config/targets.json`:
     two, your citizenship status for the third)
   - `currently_enrolled` — set to `Yes` or `No` as appropriate
 - `ashby_company_slugs`, `lever_company_slugs` — replace `REPLACE_ME` with
-  real company slugs, or leave as `REPLACE_ME` to skip those boards.
+  real company slugs, or leave as `REPLACE_ME` to have the validator
+  auto-seed them from the project's vetted lists (see section 3.1). To
+  skip a board entirely, you must remove the placeholder and keep the
+  board out of your slug list after seeding (delete the seeded slugs).
 - `simplify_feeds` — replace `REPLACE_ME` with one or both of the known
   feed names `summer_internships` and `new_grad`, or leave as
   `REPLACE_ME` to skip the SimplifyJobs board. The feeds are the
@@ -60,7 +63,42 @@ bash scripts/validate_local_config.sh
 
 - Prints `validate_local_config: OK` on success — config is ready.
 - Any `ERROR` line names the file and field to fix (exit code 1).
-- Placeholder Ashby/Lever slugs print a `WARNING` but do not block the run.
+- Placeholder Ashby/Lever slugs are auto-seeded (section 3.1); other
+  placeholder state (e.g. `simplify_feeds`) prints a `WARNING` but does
+  not block the run.
+
+### 3.1 Vetted slug auto-seeding (Phase 6)
+
+When `ashby_company_slugs` or `lever_company_slugs` is **unset, empty,
+or placeholder-only** (`["REPLACE_ME"]`), the validator seeds it from
+the project-owned vetted lists so a fresh clone has real Ashby/Lever
+coverage on the first run:
+
+- `config/ashby_vetted_slugs.json`
+- `config/lever_vetted_slugs.json`
+
+Behavior:
+
+- Seeding never overwrites a non-placeholder value — if even one entry
+  in your array is a real slug, the array is treated as a deliberate
+  choice and left untouched.
+- Seeding is deterministic and idempotent: it writes the vetted list
+  verbatim in one atomic JSON write of `config/targets.json`; a second
+  run does nothing.
+- Every seeded array prints a visible `WARNING` at run start
+  (`auto-seeded from vetted list …`) so you are not surprised — review
+  the change in `config/targets.json` and edit or revert if unwanted.
+- The seeder can also be run directly:
+  `python3 scripts/seed_vetted_slugs.py`
+
+**Provenance.** The vetted lists are trust-bearing, project-owned
+artifacts committed to the repo. Every slug was hand-verified against
+the public board APIs (`api.ashbyhq.com/posting-api/job-board/{slug}`,
+`api.lever.co/v0/postings/{slug}?mode=json` — HTTP 200 with a
+non-empty postings array) on the `verified_at` date recorded in each
+file. Additions are code changes: verify the endpoint by hand, update
+`verified_at`, and review in a PR. Nothing is ever pulled from a
+remote source at run time.
 
 ## 4. Google Sheets sync (Phase 3, optional)
 

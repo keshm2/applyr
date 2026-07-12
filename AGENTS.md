@@ -82,7 +82,12 @@
   is empty, missing, or contains only placeholder values (e.g.
   "REPLACE_ME"), skip that board for this run and log a single warning to
   the session output — do not abort the run. Other boards continue
-  normally.
+  normally. Note this state is normally short-lived: the config
+  validator auto-seeds placeholder-only slug arrays from the
+  project-owned vetted lists (config/ashby_vetted_slugs.json,
+  config/lever_vetted_slugs.json) via scripts/seed_vetted_slugs.py —
+  it never overwrites an array containing any real slug. Never edit
+  the vetted lists at run time; additions are reviewed code changes.
 - SimplifyJobs: use the deterministic fetch helper — never scrape GitHub
   with Playwright:
   `python3 scripts/fetch_simplify_listings.py`
@@ -249,7 +254,8 @@
 - applied_jobs.json entries must include: job_id, company, title, url,
   date_applied, status (applied|failed|needs_review), role_type
   (internship|new_grad), source (linkedin|indeed|greenhouse|lever|
-  wellfound|handshake|ashbyhq|simplify), resume_used (general|cyber),
+  wellfound|handshake|ashbyhq|simplify), resume_used
+  (swe|ai_ml|balanced|cyber|networking_cyber),
   ats_score (number), location_tier (preferred|fallback),
   cover_letter_used (bool). When status is "failed" or "needs_review",
   a "reasoning" field is also required — a specific, one-sentence

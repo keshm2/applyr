@@ -107,7 +107,7 @@ never guess — if you're unsure about a form field, you skip and log it.
          `bash scripts/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
          Follow the File write discipline schema (job_id, company, title,
          url, date_applied, status="needs_review", role_type, source,
-         resume_used="general", ats_score=0, location_tier,
+         resume_used="balanced", ats_score=0, location_tier,
          cover_letter_used=false, reasoning from the helper). role_type,
          source, and location_tier come from the canonical job record /
          scrape_batch entry.
@@ -188,8 +188,11 @@ For each job with ats_score >= 60:
    jobs sourced via Ashby/Lever API if no browser apply step is needed —
    use the applyUrl field directly).
 3. Fill form fields using config/targets.json "safe_fields" only.
-4. Attach the matching resume PDF (base_resume_general.pdf or
-   base_resume_cyber.pdf, matching resume_used from Phase 2).
+4. Attach the matching resume PDF from data/resumes/
+   (base_resume_<resume_used>.pdf — e.g. base_resume_swe.pdf,
+   base_resume_ai_ml.pdf, base_resume_balanced.pdf,
+   base_resume_cyber.pdf, base_resume_networking_cyber.pdf —
+   matching resume_used from Phase 2).
 5. Paste tailored cover letter into the cover letter field if present.
 6. Submit. Capture confirmation page or error.
 7. Log result to data/applied_jobs.json immediately via the state helper —
@@ -322,7 +325,8 @@ After all applications:
 - applied_jobs.json entries must include: job_id, company, title, url,
   date_applied, status (applied|failed|needs_review), role_type
   (internship|new_grad), source (linkedin|indeed|greenhouse|lever|
-  wellfound|handshake|ashbyhq|simplify), resume_used (general|cyber),
+  wellfound|handshake|ashbyhq|simplify), resume_used
+  (swe|ai_ml|balanced|cyber|networking_cyber),
   ats_score (number), location_tier (preferred|fallback),
   cover_letter_used (bool). When status is "failed" or "needs_review",
   a "reasoning" field is also required — a specific, one-sentence
