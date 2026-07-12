@@ -110,6 +110,32 @@
     an empty JD skips every deterministic hard-reject check.
   - The helper's `sponsorship` field is informational/audit-only. Do
     not filter on it — the phase 4 fit gate is the only classifier.
+- Workday (phase 7, REVIEW-ONLY): tenants are configured in
+  config/targets.json "workday_tenants" as "<host>/<site>" strings —
+  the tenant is the unit of configuration; board URLs follow
+  `https://<company>.wd<n>.myworkdayjobs.com/<site>` (each company
+  tenant differs in subdomain and site name). Use the deterministic
+  fetch helper — it calls the tenant's public, auth-free CXS JSON
+  endpoints; only fall back to Playwright on a posting when the helper
+  fails for it:
+  `python3 scripts/fetch_workday_listings.py --search "intern" --limit 200`
+  One raw-job JSON object per line (source "workday"), ready for
+  canonicalize.
+  - Missing/empty/placeholder "workday_tenants" → helper warns, prints
+    nothing, exits 0; skip the board, continue the run. Non-zero exit
+    (every tenant failed) → one warning, skip, continue.
+  - Listings carry NO JD text. After role filtering and BEFORE the fit
+    gate, fetch the JD per surviving candidate with
+    `python3 scripts/fetch_workday_listings.py --jd-url '<posting-url>'`
+    and re-canonicalize/upsert with the fetched jd_text. Never fit-gate
+    a Workday job with empty jd_text.
+  - **No auto-apply path exists for Workday.** A Workday job whose fit
+    gate returns "candidate" routes to needs_review (applied_jobs +
+    review_queue + record-event + needs_review Discord notification)
+    with reasoning "Workday review-only path: <title> at <company>;
+    user to apply manually". Never tailor, never form-fill, never
+    submit a Workday application. needs_review items are not
+    applications and do not count against the 25-per-session cap.
 - LinkedIn, Indeed, Handshake, Greenhouse, Wellfound: use Playwright MCP for
   browser-based scraping.
 
@@ -254,7 +280,7 @@
 - applied_jobs.json entries must include: job_id, company, title, url,
   date_applied, status (applied|failed|needs_review), role_type
   (internship|new_grad), source (linkedin|indeed|greenhouse|lever|
-  wellfound|handshake|ashbyhq|simplify), resume_used
+  wellfound|handshake|ashbyhq|simplify|workday), resume_used
   (swe|ai_ml|balanced|cyber|networking_cyber),
   ats_score (number), location_tier (preferred|fallback),
   cover_letter_used (bool). When status is "failed" or "needs_review",

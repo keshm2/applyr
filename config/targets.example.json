@@ -54,13 +54,39 @@
     "year-round",
     "year round"
   ],
-  "preferred_locations": ["Remote", "Seattle, WA", "Bellevue, WA", "San Francisco, CA", "Los Angeles, CA", "New York, NY"],
+  "preferred_locations": [
+    "Remote",
+    "Seattle, WA",
+    "Bellevue, WA",
+    "San Francisco, CA",
+    "Los Angeles, CA",
+    "New York, NY"
+  ],
   "fallback_scope": "United States",
   "graduation_date": "June 2027",
-  "boards": ["linkedin", "indeed", "greenhouse", "lever", "wellfound", "handshake", "ashbyhq", "simplify"],
-  "ashby_company_slugs": ["REPLACE_ME"],
-  "lever_company_slugs": ["REPLACE_ME"],
-  "simplify_feeds": ["REPLACE_ME"],
+  "boards": [
+    "linkedin",
+    "indeed",
+    "greenhouse",
+    "lever",
+    "wellfound",
+    "handshake",
+    "ashbyhq",
+    "simplify",
+    "workday"
+  ],
+  "ashby_company_slugs": [
+    "REPLACE_ME"
+  ],
+  "lever_company_slugs": [
+    "REPLACE_ME"
+  ],
+  "simplify_feeds": [
+    "REPLACE_ME"
+  ],
+  "workday_tenants": [
+    "REPLACE_ME"
+  ],
   "safe_fields": {
     "first_name": "YOUR_FIRST_NAME",
     "last_name": "YOUR_LAST_NAME",

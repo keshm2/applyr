@@ -85,6 +85,7 @@ check_array_nonempty "$TARGETS" boards
 check_array_or_absent "$TARGETS" ashby_company_slugs
 check_array_or_absent "$TARGETS" lever_company_slugs
 check_array_or_absent "$TARGETS" simplify_feeds
+check_array_or_absent "$TARGETS" workday_tenants
 check_object        "$TARGETS" safe_fields
 
 # Required safe_fields keys for form filling.
@@ -176,6 +177,15 @@ fi
 # SimplifyJobs feeds (phase 5): same warn-and-skip contract as the slug
 # arrays. Known feed names are owned by scripts/fetch_simplify_listings.py;
 # unknown names are warned about there at fetch time, not here.
+# Workday tenants (phase 7): same warn-and-skip contract. Tenant strings
+# are parsed/validated by scripts/fetch_workday_listings.py at fetch time.
+WORKDAY_PLACEHOLDER="$(placeholder_slugs "$TARGETS" workday_tenants)"
+if key_absent "$TARGETS" workday_tenants; then
+  warn "workday_tenants is not configured — Workday board will be skipped this run"
+elif [ -n "$WORKDAY_PLACEHOLDER" ]; then
+  warn "workday_tenants contains placeholder value(s): $WORKDAY_PLACEHOLDER — Workday board will be skipped this run"
+fi
+
 SIMPLIFY_PLACEHOLDER="$(placeholder_slugs "$TARGETS" simplify_feeds)"
 if key_absent "$TARGETS" simplify_feeds; then
   warn "simplify_feeds is not configured — SimplifyJobs board will be skipped this run"

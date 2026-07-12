@@ -36,22 +36,50 @@ never guess — if you're unsure about a form field, you skip and log it.
      continue. On a non-zero exit (all feeds failed to fetch), log one
      warning, skip the board, continue the run.
    - SimplifyJobs listings carry NO JD text. After role filtering
-     (step 7) and BEFORE the fit gate (step 9), fetch the JD body from
+     (step 8) and BEFORE the fit gate (step 10), fetch the JD body from
      each surviving candidate's `url`: Ashby/Lever URLs via their
      public JSON APIs, everything else via Playwright. Re-canonicalize
      and upsert the record with the fetched jd_text. Never run the fit
      gate on a SimplifyJobs job with empty jd_text.
    - The `sponsorship` field is informational only — do not filter on
      it; the fit gate is the only classifier.
-3. For LinkedIn, Indeed, Handshake, Greenhouse, Wellfound: use Playwright
+3. For Workday tenants: use the deterministic fetch helper — only fall
+   back to Playwright for a posting when the helper fails for it:
+   `python3 scripts/fetch_workday_listings.py --search "intern" --limit 200`
+   It reads config/targets.json "workday_tenants" ("<host>/<site>"
+   strings, e.g. "nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite")
+   and prints one raw-job JSON object per line (source "workday") via
+   the tenants' public CXS JSON endpoints.
+   - If "workday_tenants" is missing, empty, or placeholder-only
+     ("REPLACE_ME"), the helper warns and exits 0 with no output — skip
+     the board and continue. On a non-zero exit (every tenant failed),
+     log one warning, skip the board, continue the run.
+   - Workday listings carry NO JD text. After role filtering (step 8)
+     and BEFORE the fit gate (step 10), fetch the JD per surviving
+     candidate:
+     `python3 scripts/fetch_workday_listings.py --jd-url '<posting-url>'`
+     then re-canonicalize and upsert with the fetched jd_text. Never
+     fit-gate a Workday job with empty jd_text. If the JD fetch fails,
+     fall back to Playwright on the posting URL; if that also fails,
+     drop the posting with a logged warning.
+   - **Workday is REVIEW-ONLY (phase 7): there is NO auto-apply path.**
+     A Workday job whose fit gate returns "candidate" is NOT kept for
+     tailoring — route it to needs_review instead, performing exactly
+     the needs_review handling in step 10 (applied_jobs append,
+     review_queue append, record-event, @discord-reporter) with
+     reasoning "Workday review-only path: <title> at <company>; user to
+     apply manually". Never invoke @resume-tailor or any form-filling
+     for a Workday job. needs_review items are not applications and do
+     not count against the 25-per-session cap.
+4. For LinkedIn, Indeed, Handshake, Greenhouse, Wellfound: use Playwright
    MCP to navigate to the board with role/location filters and scrape job
    listings, full JD text, and application URLs.
-4. Canonicalize each scraped raw job into one internal record:
+5. Canonicalize each scraped raw job into one internal record:
    `python3 scripts/job_state.py canonicalize '<raw-job-json>'`
    Pass the raw job (company, title, url, source, jd_text, location, etc.)
    as a single JSON object string. The helper returns a canonical job JSON
    with a stable job_key (the canonical identity) and a job_id.
-5. Upsert each canonical record into the registry:
+6. Upsert each canonical record into the registry:
    `python3 scripts/job_state.py upsert-job '<canonical-job-json>'`
    The helper merges by job_key — duplicates collapse into one record
    and source listings are merged into the record's sources array. This
@@ -60,7 +88,7 @@ never guess — if you're unsure about a form field, you skip and log it.
    the registry — the registry tracks every job ever seen, applied or
    not, and a fresh record carries latest_status "new" (not a blocking
    status).
-6. Build a unique canonical scrape batch by collapsing candidates by
+7. Build a unique canonical scrape batch by collapsing candidates by
    job_key (the canonical identity) — the same job listed by multiple
    sources merges into one batch entry, preserving source information
    from the registry record's sources array where possible. Then drop
@@ -70,13 +98,13 @@ never guess — if you're unsure about a form field, you skip and log it.
    Phase 3, which blocks only on blocking statuses (applied,
    needs_review, failed, skipped_unfit), not on mere registry
    membership.
-7. Apply role filtering: a job title is a candidate if it contains at
+8. Apply role filtering: a job title is a candidate if it contains at
    least one term from config/targets.json "role_keywords" AND at least
    one term from "level_keywords" (case-insensitive substring match). If
    a title matches role_keywords but not level_keywords, check the JD
    body before rejecting.
-8. Season is not a filter — internships/co-ops in any season are in scope.
-9. Run the deterministic JD fit gate on every role-filtered candidate
+9. Season is not a filter — internships/co-ops in any season are in scope.
+10. Run the deterministic JD fit gate on every role-filtered candidate
     before tailoring:
     `python3 scripts/evaluate_job_fit.py '<canonical-job-json>'`
     Pass the canonical job JSON (the same object upserted into the
@@ -121,7 +149,7 @@ never guess — if you're unsure about a form field, you skip and log it.
       Phase 2 tailoring.
     Only candidate jobs proceed to scrape_batch.json and Phase 2. Never
     send a skipped_unfit or needs_review job into tailoring.
-10. Write the filtered batch to data/scrape_batch.json (temp file), built
+11. Write the filtered batch to data/scrape_batch.json (temp file), built
    from unique canonical candidates rather than raw duplicates. Tag each
    entry with:
    - matched_category: the specific term from config/targets.json
@@ -133,11 +161,15 @@ never guess — if you're unsure about a form field, you skip and log it.
    - location_tier: "preferred" if the job's location matched a
      config/targets.json "preferred_locations" entry, or "fallback" if
      it was accepted under the US-wide fallback scope.
-11. Process preferred_locations matches first; continue into fallback_scope
+12. Process preferred_locations matches first; continue into fallback_scope
     matches after — do not stop early.
 
 ### Phase 2 — Tailor
 For each job in scrape_batch.json:
+0. Safety guard: if a job with source "workday" somehow reached this
+   batch, do not tailor it — route it to needs_review per the Workday
+   review-only rule (Phase 1 step 3) and continue. Phases 2 and 3
+   never process Workday jobs.
 1. Invoke @resume-tailor with the job title, full JD text, and
    matched_category.
 2. Receive back: resume_used, tailored_bullets, cover_letter, ats_score,
@@ -171,7 +203,7 @@ For each job with ats_score >= 60:
       If the helper exits non-zero, returns invalid JSON, or returns an
       unexpected fit_status, treat the job as needs_review and do not
       apply. If fit_status is not candidate, do not apply. Handle
-      skipped_unfit and needs_review exactly as in Phase 1 step 9
+      skipped_unfit and needs_review exactly as in Phase 1 step 10
       (skipped_unfit: local-only record-event; needs_review: append to
       applied_jobs.json + review_queue.json, record-event,
       @discord-reporter needs_review route). Then skip the job — do not
@@ -325,7 +357,7 @@ After all applications:
 - applied_jobs.json entries must include: job_id, company, title, url,
   date_applied, status (applied|failed|needs_review), role_type
   (internship|new_grad), source (linkedin|indeed|greenhouse|lever|
-  wellfound|handshake|ashbyhq|simplify), resume_used
+  wellfound|handshake|ashbyhq|simplify|workday), resume_used
   (swe|ai_ml|balanced|cyber|networking_cyber),
   ats_score (number), location_tier (preferred|fallback),
   cover_letter_used (bool). When status is "failed" or "needs_review",

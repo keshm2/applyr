@@ -12,8 +12,8 @@ split keeps every state-mutating step auditable and means the agent
 itself never hand-writes runtime state. Each run is capped at **25
 applications** to stay polite to upstream boards and rate limits.
 
-> **Status** — Phases 0–6 of the phased build are implemented and
-> described under [What ships today](#what-ships-today). Phases 7–9
+> **Status** — Phases 0–7 of the phased build are implemented and
+> described under [What ships today](#what-ships-today). Phases 8–9
 > are planned. Later productization ideas (browser extension, hosted
 > accounts, TUI/web apps) are tracked in the planning document and are
 > **not** implemented.
@@ -23,8 +23,7 @@ applications** to stay polite to upstream boards and rate limits.
 | | |
 | --- | --- |
 | **Mode** | Single user, local-first, cron-friendly |
-| **Boards (today)** | Ashby, Lever (public JSON APIs); SimplifyJobs (public GitHub JSON feeds); LinkedIn, Indeed, Handshake, Greenhouse, Wellfound (Playwright) |
-| **Boards (planned)** | Workday |
+| **Boards (today)** | Ashby, Lever (public JSON APIs); SimplifyJobs (public GitHub JSON feeds); Workday (public CXS JSON, review-only); LinkedIn, Indeed, Handshake, Greenhouse, Wellfound (Playwright) |
 | **Runtime** | OpenCode orchestrator + stdlib-only Python helpers |
 | **Notifications** | Discord webhooks routed by outcome (`success` / `needs_review` / `failed` / `summary`) |
 | **Tracker** | Google Sheet — one append-only row per successful application |
@@ -55,7 +54,7 @@ For each run, Ares:
 
 ## What ships today
 
-Phases 0–6 of the project roadmap are implemented:
+Phases 0–7 of the project roadmap are implemented:
 
 - **State and config hardening (phase 0).** `.gitignore` excludes all
   live configs, runtime state, PII, browser artifacts, logs, and Python
@@ -88,6 +87,13 @@ Phases 0–6 of the project roadmap are implemented:
   orchestrator fetches each surviving candidate's JD from its listing
   URL before the fit gate runs. A missing or placeholder
   `simplify_feeds` config skips the board with a warning.
+- **Workday review-only ingestion (phase 7).** A stdlib-only helper
+  (`scripts/fetch_workday_listings.py`) pulls postings from configured
+  Workday tenants via their public CXS JSON endpoints (list + per-job
+  JD fetch). Promising jobs are routed to the review queue and the
+  needs-review Discord webhook for manual application — **no
+  auto-apply path exists for Workday**, and review items don't count
+  against the session cap.
 - **Vetted Ashby/Lever slug auto-seeding (phase 6).** When
   `ashby_company_slugs` / `lever_company_slugs` are unset, empty, or
   placeholder-only, `scripts/seed_vetted_slugs.py` (run by the config
@@ -263,8 +269,8 @@ steps are in `docs/SETUP.md` §4.
 
 ## Roadmap
 
-Ares is a phased build-out. **Phases 0–6 are implemented** and
-described under [What ships today](#what-ships-today). **Phases 7–9
+Ares is a phased build-out. **Phases 0–7 are implemented** and
+described under [What ships today](#what-ships-today). **Phases 8–9
 are planned, not yet implemented**.
 
 | Phase | Status | Scope |
@@ -276,7 +282,7 @@ are planned, not yet implemented**.
 | 4 — Deterministic JD fit gate | Shipped | `evaluate_job_fit.py`, pre-tailoring and pre-apply |
 | 5 — SimplifyJobs ingestion | Shipped | `fetch_simplify_listings.py` + JD enrichment before the fit gate; docs cleanup |
 | 6 — Vetted Ashby/Lever slug auto-seeding | Shipped | `seed_vetted_slugs.py` + `config/{ashby,lever}_vetted_slugs.json`, wired into the validator |
-| 7 — Workday review-only support | Planned | Playwright scrape + fit gate; promising jobs routed to `needs_review`, no auto-apply |
+| 7 — Workday review-only support | Shipped | `fetch_workday_listings.py` (public CXS JSON) + fit gate; promising jobs routed to `needs_review`, no auto-apply |
 | 8 — Scheduler upgrade | Planned | 30-minute 24/7 cadence with overlap protection and heartbeat |
 | 9 — Migration-friendliness review | Planned | document per-user vs. project-owned seams; stays single-user |
 | Productization (extension, accounts, TUI, web) | Future | tracked in the planning document. **No implementation work authorized.** |

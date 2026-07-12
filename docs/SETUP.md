@@ -57,6 +57,14 @@ In `config/targets.json`:
   auto-seed them from the project's vetted lists (see section 3.1). To
   skip a board entirely, you must remove the placeholder and keep the
   board out of your slug list after seeding (delete the seeded slugs).
+- `workday_tenants` — replace `REPLACE_ME` with `"<host>/<site>"`
+  strings for the Workday tenants you want watched (e.g.
+  `"nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite"` — find the
+  host and site name in any posting URL on the company's careers
+  site), or leave the placeholder to skip the board. Workday is
+  **review-only**: promising postings land in the review queue and
+  Discord for you to apply manually — the agent never submits a
+  Workday application.
 - `simplify_feeds` — replace `REPLACE_ME` with one or both of the known
   feed names `summer_internships` and `new_grad`, or leave as
   `REPLACE_ME` to skip the SimplifyJobs board. The feeds are the
