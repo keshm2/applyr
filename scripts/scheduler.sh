@@ -1,7 +1,7 @@
 #!/bin/bash
 # scheduler.sh — always-on 30-minute schedule management (Phase 8).
 #
-# macOS: manages a launchd user agent (label com.ares.job-agent) that
+# macOS: manages a launchd user agent (label com.applyr.job-agent) that
 # runs scripts/run_job_agent.sh every 30 minutes, 24/7, starting at
 # load. Overlap protection lives in the run script itself (lock dir +
 # skip-on-overlap + stale-lock reclamation) — launchd only supplies the
@@ -18,9 +18,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LABEL="com.ares.job-agent"
+LABEL="com.applyr.job-agent"
+# Pre-rename installs used this label; install/uninstall clean it up so a
+# renamed deployment never runs two schedules.
+OLD_LABEL="com.ares.job-agent"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-INTERVAL="${ARES_SCHEDULE_INTERVAL_SEC:-1800}"
+OLD_PLIST="$HOME/Library/LaunchAgents/$OLD_LABEL.plist"
+INTERVAL="${APPLYR_SCHEDULE_INTERVAL_SEC:-${ARES_SCHEDULE_INTERVAL_SEC:-1800}}"
 
 plist_body() {
   cat <<PLIST
@@ -57,6 +61,8 @@ case "${1:-}" in
     mkdir -p "$HOME/Library/LaunchAgents" "$PROJECT_ROOT/logs"
     plist_body > "$PLIST"
     plutil -lint "$PLIST" >/dev/null
+    launchctl bootout "gui/$(id -u)/$OLD_LABEL" 2>/dev/null || true
+    rm -f "$OLD_PLIST"
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
     launchctl bootstrap "gui/$(id -u)" "$PLIST"
     echo "scheduler: installed $LABEL (every $((INTERVAL / 60)) min, 24/7)."
@@ -64,7 +70,8 @@ case "${1:-}" in
     ;;
   uninstall)
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-    rm -f "$PLIST"
+    launchctl bootout "gui/$(id -u)/$OLD_LABEL" 2>/dev/null || true
+    rm -f "$PLIST" "$OLD_PLIST"
     echo "scheduler: uninstalled $LABEL."
     ;;
   status)

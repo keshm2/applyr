@@ -8,9 +8,9 @@ import { StatusScreen } from "./ui/StatusScreen.js";
 import { runWizard } from "./wizard.js";
 import { runAgent } from "./run.js";
 
-const HELP = `ares — persistent TUI for the Ares job-application agent
+const HELP = `applyr — persistent TUI for the applyr job-application agent
 
-Usage: ares [command]
+Usage: applyr [command]
 
   (no command)      open the app (status · jobs · review · history)
   review | history  open the app on that screen
@@ -19,8 +19,10 @@ Usage: ares [command]
   setup [--check]   interactive config wizard; --check only validates
   help              show this help
 
+Inside the app, press ? for the full key reference.
+
 State writes go through the repo's Python/bash helpers — the TUI never
-edits state JSON directly. Set ARES_ROOT to run outside the repo.`;
+edits state JSON directly. Set APPLYR_ROOT to run outside the repo.`;
 
 /** Ensure non-TTY stdout has flushed so process.exit() doesn't truncate
  *  piped/CI output from one-shot renders. */
@@ -54,7 +56,18 @@ async function openApp(root: string, initialTab: Tab): Promise<number> {
   const restore = () => process.stdout.write(leave);
   process.on("exit", restore);
   try {
-    await render(<App root={root} initialTab={initialTab} />).waitUntilExit();
+    const instance = render(<App root={root} initialTab={initialTab} />);
+    // On resize, Ink diffs against the frame it drew for the OLD terminal
+    // size, leaving artifacts (stale rows on shrink, misaligned lines on
+    // reflow). Clearing Ink's frame forces a clean full repaint at the new
+    // size; the App's own resize listener re-derives the layout.
+    const onResize = () => instance.clear();
+    process.stdout.on("resize", onResize);
+    try {
+      await instance.waitUntilExit();
+    } finally {
+      process.stdout.off("resize", onResize);
+    }
     return 0;
   } finally {
     process.off("exit", restore);
@@ -63,6 +76,16 @@ async function openApp(root: string, initialTab: Tab): Promise<number> {
 }
 
 async function main(): Promise<number> {
+  // Piped/CI renders: Ink falls back to 80 columns when stdout is not a
+  // TTY, while the app honors $COLUMNS/$LINES — sync Ink to the same
+  // values so one-frame test renders lay out exactly like a real
+  // terminal of that size.
+  if (!process.stdout.isTTY) {
+    const cols = Number.parseInt(process.env.COLUMNS ?? "", 10);
+    const rows = Number.parseInt(process.env.LINES ?? "", 10);
+    if (Number.isFinite(cols) && cols > 0) (process.stdout as { columns?: number }).columns = cols;
+    if (Number.isFinite(rows) && rows > 0) (process.stdout as { rows?: number }).rows = rows;
+  }
   const [command = "", ...rest] = process.argv.slice(2);
   if (command === "help" || command === "--help" || command === "-h") {
     console.log(HELP);

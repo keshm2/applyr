@@ -3,14 +3,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Locate the Ares project root. The TUI is an overlay over the repo's
+ * Locate the applyr project root. The TUI is an overlay over the repo's
  * Python core — every command needs the root to find scripts/, config/,
- * data/, and logs/. Resolution order: $ARES_ROOT, then upward from the
- * working directory, then upward from this module (covers running the
- * repo-local build from anywhere).
+ * data/, and logs/. Resolution order: $APPLYR_ROOT (legacy $ARES_ROOT
+ * honored), then upward from the working directory, then upward from
+ * this module (covers running the repo-local build from anywhere).
  */
 export function findProjectRoot(): string {
   const starts: string[] = [];
+  if (process.env.APPLYR_ROOT) starts.push(process.env.APPLYR_ROOT);
   if (process.env.ARES_ROOT) starts.push(process.env.ARES_ROOT);
   starts.push(process.cwd());
   starts.push(path.dirname(fileURLToPath(import.meta.url)));
@@ -30,7 +31,7 @@ export function findProjectRoot(): string {
     }
   }
   throw new Error(
-    "Could not locate the Ares project root (scripts/job_state.py + AGENTS.md). " +
-      "Run from inside the repo or set ARES_ROOT.",
+    "Could not locate the applyr project root (scripts/job_state.py + AGENTS.md). " +
+      "Run from inside the repo or set APPLYR_ROOT.",
   );
 }

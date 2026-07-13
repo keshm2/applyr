@@ -1,6 +1,6 @@
 #!/bin/bash
 # Job application agent — cron-driven entry point.
-# Schedule: crontab -e, then add: 0 2 * * * /full/path/to/ares/scripts/run_job_agent.sh
+# Schedule: crontab -e, then add: 0 2 * * * /full/path/to/applyr/scripts/run_job_agent.sh
 # Adjust the cd path below to your actual project root.
 
 set -euo pipefail
@@ -9,6 +9,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 mkdir -p data logs
+# Per-run fetch scratch space (AGENTS.md fetch-efficiency rules): raw
+# board dumps land here instead of the LLM transcript. Cleared per run.
+rm -rf logs/tmp && mkdir -p logs/tmp
 
 RUN_LOG="logs/run_job_agent.log"
 
@@ -22,7 +25,9 @@ RUN_LOG="logs/run_job_agent.log"
 # 30-minute schedule (and no second agent ever runs concurrently).
 LOCK_DIR="logs/.run_job_agent.lock"
 LOCK_PID="$LOCK_DIR/pid"
-LOCK_MAX_AGE_MIN="${ARES_LOCK_MAX_AGE_MIN:-60}"
+# APPLYR_* is the documented env-var prefix; the legacy ARES_* names are
+# honored as fallbacks so pre-rename schedules keep working.
+LOCK_MAX_AGE_MIN="${APPLYR_LOCK_MAX_AGE_MIN:-${ARES_LOCK_MAX_AGE_MIN:-60}}"
 
 lock_age_min() {
   local now lock_mtime
@@ -95,10 +100,10 @@ python3 scripts/generate_agent_definitions.py --check \
   || echo "[$(date)] WARNING: generated agent definitions are stale — run scripts/generate_agent_definitions.py" >> "$RUN_LOG"
 
 # --- Harness selection (Phase 15) -------------------------------------------
-# Priority: $ARES_HARNESS > config/harness.json > auto-detect (opencode,
+# Priority: $APPLYR_HARNESS > config/harness.json > auto-detect (opencode,
 # then claude). The harness only supplies LLM orchestration; every board
 # fetch, helper, and state write is identical downstream.
-HARNESS="${ARES_HARNESS:-}"
+HARNESS="${APPLYR_HARNESS:-${ARES_HARNESS:-}}"
 if [ -z "$HARNESS" ] && [ -f "config/harness.json" ]; then
   HARNESS="$(jq -r '.harness // empty' config/harness.json 2>/dev/null || true)"
 fi
@@ -140,19 +145,19 @@ SESSION_LOG="logs/session_${TIMESTAMP}.log"
 echo "run_job_agent: start $(date -u +%Y-%m-%dT%H:%M:%SZ) harness=$HARNESS" >> "$SESSION_LOG"
 
 # --- Per-session application cap (Phase 13 TUI modes) ------------------------
-# ARES_SESSION_CAP lets the TUI's automatic mode lower the per-session
+# APPLYR_SESSION_CAP lets the TUI's automatic mode lower the per-session
 # application cap. Default 25 (the hard maximum). Values above 25 clamp
 # down to 25; values below 1 or non-integer fall back to 25 with a
 # warning so a misconfigured env never blocks the run.
-SESSION_CAP="${ARES_SESSION_CAP:-25}"
+SESSION_CAP="${APPLYR_SESSION_CAP:-${ARES_SESSION_CAP:-25}}"
 if ! [[ "$SESSION_CAP" =~ ^[0-9]+$ ]]; then
-  echo "[$(date)] WARNING: ARES_SESSION_CAP='$SESSION_CAP' is not an integer; using default 25" >> "$RUN_LOG"
+  echo "[$(date)] WARNING: APPLYR_SESSION_CAP='$SESSION_CAP' is not an integer; using default 25" >> "$RUN_LOG"
   SESSION_CAP=25
 elif [ "$SESSION_CAP" -gt 25 ]; then
-  echo "[$(date)] WARNING: ARES_SESSION_CAP=$SESSION_CAP exceeds the maximum; clamping to 25" >> "$RUN_LOG"
+  echo "[$(date)] WARNING: APPLYR_SESSION_CAP=$SESSION_CAP exceeds the maximum; clamping to 25" >> "$RUN_LOG"
   SESSION_CAP=25
 elif [ "$SESSION_CAP" -lt 1 ]; then
-  echo "[$(date)] WARNING: ARES_SESSION_CAP=$SESSION_CAP is below 1; using default 25" >> "$RUN_LOG"
+  echo "[$(date)] WARNING: APPLYR_SESSION_CAP=$SESSION_CAP is below 1; using default 25" >> "$RUN_LOG"
   SESSION_CAP=25
 fi
 
@@ -161,13 +166,35 @@ RUN_PROMPT="Start a new job application run. Read AGENTS.md, load data/applied_j
    tailor and apply to at most ${SESSION_CAP} jobs this session (session cap ${SESSION_CAP} of the 25 maximum), and send a
    Discord summary when complete."
 
+# Optional operator instruction (TUI automatic mode's prompt field).
+# Appended to the run prompt, capped at 500 chars; it can narrow or focus
+# the run but never overrides AGENTS.md or the helper-write discipline.
+EXTRA_PROMPT="${APPLYR_EXTRA_PROMPT:-}"
+if [ -n "$EXTRA_PROMPT" ]; then
+  EXTRA_PROMPT="${EXTRA_PROMPT:0:500}"
+  RUN_PROMPT="$RUN_PROMPT
+   Operator instruction for this run (follow it within the rules of AGENTS.md;
+   it never overrides the session cap or the state-write discipline): ${EXTRA_PROMPT}"
+  echo "[$(date)] run includes an operator instruction (APPLYR_EXTRA_PROMPT, ${#EXTRA_PROMPT} chars)" >> "$RUN_LOG"
+fi
+
 echo "[$(date)] Starting run via harness: $HARNESS" >> "$RUN_LOG"
 
 RUN_RC=0
 if [ "$HARNESS" = "opencode" ]; then
+  # Older opencode CLIs needed --print for non-interactive output; newer
+  # ones (>= ~1.17) removed the flag (non-interactive is the default) and
+  # exit 1 with a usage dump when they see it. Probe the installed CLI's
+  # help so both generations work. The \b-free pattern must not match
+  # --print-logs, which exists in both.
+  OPENCODE_PRINT_FLAG=""
+  if opencode run --help 2>&1 | grep -qE -- '--print([^-[:alnum:]]|$)'; then
+    OPENCODE_PRINT_FLAG="--print"
+  fi
+  # shellcheck disable=SC2086 — flag is intentionally word-split (empty or one flag)
   opencode run \
     --agent job-scraper \
-    --print \
+    $OPENCODE_PRINT_FLAG \
     "$RUN_PROMPT" \
     >> "$SESSION_LOG" 2>&1 || RUN_RC=$?
 else
@@ -199,7 +226,7 @@ python3 scripts/write_heartbeat.py --exit-code "$RUN_RC" \
   --failed "$D_FAILED" --skipped-unfit "$D_SKIPPED" || true
 
 # --- Session-log retention (keep the newest N; no external shipper) ----------
-KEEP_SESSIONS="${ARES_KEEP_SESSION_LOGS:-30}"
+KEEP_SESSIONS="${APPLYR_KEEP_SESSION_LOGS:-${ARES_KEEP_SESSION_LOGS:-30}}"
 ls -1t logs/session_*.log 2>/dev/null | tail -n +"$((KEEP_SESSIONS + 1))" | while read -r old; do
   rm -f "$old"
 done

@@ -31,7 +31,7 @@ export interface RegistryRecord {
   internship_term?: string;
 }
 
-export interface AresState {
+export interface ApplyrState {
   applied: AppliedJob[];
   queue: QueueEntry[];
   registry: RegistryRecord[];
@@ -46,7 +46,7 @@ function readJsonArray<T>(file: string): T[] {
   }
 }
 
-export function loadState(root: string): AresState {
+export function loadState(root: string): ApplyrState {
   return {
     applied: readJsonArray<AppliedJob>(path.join(root, "data", "applied_jobs.json")),
     queue: readJsonArray<QueueEntry>(path.join(root, "data", "review_queue.json")),
@@ -68,7 +68,7 @@ export function registryByJobId(
  * moved past needs_review. The queue file itself is append-only (helper
  * discipline), so "resolved" is derived, never deleted.
  */
-export function isResolved(state: AresState, entry: QueueEntry): boolean {
+export function isResolved(state: ApplyrState, entry: QueueEntry): boolean {
   const outcome = state.applied.find(
     (a) => a.job_id === entry.job_id && a.status !== "needs_review",
   );
@@ -87,7 +87,7 @@ export function isResolved(state: AresState, entry: QueueEntry): boolean {
  * latest_status is applied or failed. Used to guard dismiss() from
  * overwriting a real outcome with skipped_unfit.
  */
-export function hasAppliedOrFailed(state: AresState, entry: QueueEntry): boolean {
+export function hasAppliedOrFailed(state: ApplyrState, entry: QueueEntry): boolean {
   const outcome = state.applied.find(
     (a) => a.job_id === entry.job_id && (a.status === "applied" || a.status === "failed"),
   );
@@ -101,7 +101,7 @@ export function hasAppliedOrFailed(state: AresState, entry: QueueEntry): boolean
  * skipped_unfit. Used by dismiss() to avoid re-dismissing (and recording a
  * duplicate skipped_unfit event for) an entry already resolved as dismissed.
  */
-export function isDismissed(state: AresState, entry: QueueEntry): boolean {
+export function isDismissed(state: ApplyrState, entry: QueueEntry): boolean {
   const rec = registryByJobId(state.registry, entry.job_id);
   return rec?.latest_status === "skipped_unfit";
 }

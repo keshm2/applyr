@@ -1,14 +1,25 @@
 import React, { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
-import type { AresState } from "../state.js";
+import type { ApplyrState } from "../state.js";
+import { openUrl, helperError } from "../helpers.js";
 import { statusColor, statusGlyph, theme, SELECT_MARKER } from "../theme.js";
 
-const PAGE = 12;
-
-export function HistoryScreen({ state, active }: { state: AresState; active: boolean }) {
+export function HistoryScreen({
+  state,
+  active,
+  contentRows = 20,
+}: {
+  state: ApplyrState;
+  active: boolean;
+  /** Rows the shell hands this screen — the list grows/shrinks with it. */
+  contentRows?: number;
+}) {
   const jobs = [...state.applied].reverse(); // newest first
   const [cursor, setCursor] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [message, setMessage] = useState("");
+  // Screen-internal chrome: title, selection details, message, pagination.
+  const PAGE = Math.max(3, Math.min(30, contentRows - 8));
 
   const clampCursor = (c: number) => Math.max(0, Math.min(jobs.length - 1, c));
   const maxOffset = Math.max(0, jobs.length - PAGE);
@@ -33,6 +44,19 @@ export function HistoryScreen({ state, active }: { state: AresState; active: boo
           setOffset((o) => (next < o ? Math.max(0, o - 1) : o));
           return next;
         });
+      }
+      if (key.return || input === "o") {
+        const entry = jobs[cursor];
+        if (!entry) {
+          setMessage("No outcomes recorded yet — nothing to open.");
+          return;
+        }
+        try {
+          openUrl(entry.url);
+          setMessage(`Opened ${entry.url}`);
+        } catch (err) {
+          setMessage(`Could not open browser: ${helperError(err)}`);
+        }
       }
     },
     { isActive: active && Boolean(process.stdin.isTTY) },
@@ -99,6 +123,12 @@ export function HistoryScreen({ state, active }: { state: AresState; active: boo
         </Box>
       ) : null}
 
+      {message ? (
+        <Box marginTop={1}>
+          <Text dimColor>{message}</Text>
+        </Box>
+      ) : null}
+
       {jobs.length > PAGE ? (
         <Box marginTop={1}>
           <Text dimColor>
@@ -110,4 +140,4 @@ export function HistoryScreen({ state, active }: { state: AresState; active: boo
   );
 }
 
-export const HISTORY_HINTS = "↑/↓ navigate";
+export const HISTORY_HINTS = "↑↓ select · enter/o open";

@@ -46,7 +46,7 @@ import urllib.request
 
 DEFAULT_TARGETS = "config/targets.json"
 PLACEHOLDER = "replace_me"
-USER_AGENT = "ares-job-agent/phase5 (+https://github.com/SimplifyJobs)"
+USER_AGENT = "applyr-job-agent/phase5 (+https://github.com/SimplifyJobs)"
 
 # Project-owned feed map. Adding a feed here is a code change reviewed in
 # a PR — feeds are never taken from remote config at run time.

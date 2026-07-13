@@ -1,11 +1,14 @@
 {
-  "name": "ares-apply",
-  "version": "0.1.0",
-  "description": "Terminal UI overlay for Ares — manual job search, automatic runs, review triage, status, and history over the Python core.",
+  "name": "applyr",
+  "version": "0.5.5a",
+  "description": "Terminal UI overlay for applyr — manual job search, automatic runs, review triage, status, and history over the Python core.",
+  "publishConfig": {
+    "tag": "alpha"
+  },
   "license": "MIT",
   "type": "module",
   "bin": {
-    "ares": "dist/cli.js"
+    "applyr": "dist/cli.js"
   },
   "files": [
     "dist"

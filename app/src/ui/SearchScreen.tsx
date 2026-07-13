@@ -12,6 +12,14 @@ import {
   type SourceResult,
 } from "../jobs.js";
 import { SELECT_MARKER, statusGlyph, theme } from "../theme.js";
+import {
+  InlineTextInput,
+  deleteBackward,
+  deleteForward,
+  insertAtCursor,
+  moveCursorLeft,
+  moveCursorRight,
+} from "./TextInput.js";
 
 const SOURCE_LABEL: Record<JobSource, string> = {
   ashbyhq: "Ashby",
@@ -26,24 +34,30 @@ export function SearchScreen({
   active,
   onInputActiveChange,
   onStateChange,
-  rows,
+  contentRows,
 }: {
   root: string;
   active: boolean;
   onInputActiveChange: (active: boolean) => void;
   onStateChange: () => void;
-  rows: number;
+  /** Rows the shell hands this screen — the list grows/shrinks with it. */
+  contentRows: number;
 }) {
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState(true);
+  const [queryCursor, setQueryCursor] = useState(0);
+  // Browse mode first: switching to this tab must never steal the
+  // keyboard — typing starts only when the user presses /.
+  const [editing, setEditing] = useState(false);
   const [action, setAction] = useState<Action>("idle");
   const [jobs, setJobs] = useState<SearchJob[]>([]);
   const [sources, setSources] = useState<Partial<Record<JobSource, SourceResult>>>({});
   const [cursor, setCursor] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [message, setMessage] = useState("Type a title query and press enter to search live boards.");
+  const [message, setMessage] = useState("Press / and type a title query, then enter to search the live boards.");
   const [fits, setFits] = useState<Record<string, FitResult>>({});
-  const visible = Math.max(2, Math.min(9, rows - 20));
+  // Screen-internal chrome: query row, sources row, selection details (2),
+  // message row, one row of slack.
+  const visible = Math.max(3, Math.min(30, contentRows - 6));
 
   const busy = action !== "idle";
   const capturesInput = active && editing && !busy;
@@ -79,7 +93,11 @@ export function SearchScreen({
       setSources(result.sources);
       setCursor(0);
       setOffset(0);
-      setMessage(result.jobs.length === 0 ? "No matching titles found. Press / to refine the query." : `${result.jobs.length} matching postings`);
+      setMessage(
+        result.jobs.length === 0
+          ? "No matching titles found. Press / to refine the query."
+          : `${result.jobs.length} matching postings — ↑/↓ select · enter open · f fit · s save`,
+      );
     } catch (err) {
       setMessage(`Search failed: ${errorMessage(err)}`);
     } finally {
@@ -120,17 +138,47 @@ export function SearchScreen({
       if (editing) {
         if (key.return) void search();
         else if (key.escape) setEditing(false);
-        else if (key.backspace || key.delete) setQuery((value) => value.slice(0, -1));
-        else if (!key.ctrl && !key.meta && input && !/\p{C}/u.test(input)) setQuery((value) => value + input);
+        else if (key.leftArrow) {
+          const next = moveCursorLeft({ value: query, cursor: queryCursor });
+          setQueryCursor(next.cursor);
+        } else if (key.rightArrow) {
+          const next = moveCursorRight({ value: query, cursor: queryCursor });
+          setQueryCursor(next.cursor);
+        } else if (key.backspace) {
+          const next = deleteBackward({ value: query, cursor: queryCursor });
+          setQuery(next.value);
+          setQueryCursor(next.cursor);
+        } else if (key.delete) {
+          const next = deleteForward({ value: query, cursor: queryCursor });
+          setQuery(next.value);
+          setQueryCursor(next.cursor);
+        } else if (!key.ctrl && !key.meta && input && !/\p{C}/u.test(input)) {
+          const next = insertAtCursor({ value: query, cursor: queryCursor }, input);
+          setQuery(next.value);
+          setQueryCursor(next.cursor);
+        }
         return;
       }
       if (busy) return;
-      if (input === "/") return setEditing(true);
+      if (input === "/") {
+        setEditing(true);
+        return setQueryCursor(query.length);
+      }
       if (key.downArrow || input === "j") return move(1);
       if (key.upArrow || input === "k") return move(-1);
+      const isAction = key.return || input === "o" || input === "f" || input === "s";
+      if (!isAction) return;
       const selected = jobs[cursor];
-      if (!selected) return;
-      if (input === "o") {
+      if (!selected) {
+        // Feedback instead of a silently dead key.
+        setMessage(
+          jobs.length === 0
+            ? "No results yet — press / to type a query, then enter to search."
+            : "Nothing selected — use ↑/↓ to pick a posting first.",
+        );
+        return;
+      }
+      if (key.return || input === "o") {
         try {
           openUrl(selected.apply_url || selected.url);
           setMessage("Opened posting in your browser.");
@@ -152,8 +200,13 @@ export function SearchScreen({
     <Box flexDirection="column">
       <Box>
         <Text bold color={theme.accent}>Jobs </Text><Text dimColor>manual search · query </Text>
-        <Text color={editing ? theme.accent : undefined} inverse={editing}>{query || "type a job title"}</Text>
-        {editing ? <Text color={theme.accent}>▏</Text> : null}
+        <InlineTextInput
+          value={query}
+          cursor={queryCursor}
+          active={editing}
+          placeholder="type a job title"
+          wrap="truncate-end"
+        />
       </Box>
       <Box>
         {(["ashbyhq", "lever", "workday"] as JobSource[]).map((source) => (
@@ -203,4 +256,5 @@ function SourceBadge({ result, loading }: { result?: SourceResult; loading: bool
   return <Text color={theme.good}>{statusGlyph.applied} {result.count}</Text>;
 }
 
-export const SEARCH_HINTS = "/ query · ↑↓ move · o open · f fit · s save";
+export const SEARCH_HINTS = "/ query · ↑↓ move · enter/o open · f fit · s save";
+export const SEARCH_EDIT_HINTS = "type · ←→ move · backspace/delete · enter search · esc done";

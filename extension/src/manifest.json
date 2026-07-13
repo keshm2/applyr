@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "applyr — application assistant",
+  "version": "0.5.5",
+  "description": "Autofill job applications from your local applyr profile, see the deterministic fit verdict, and record outcomes locally. Never submits a form for you.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html"
+}

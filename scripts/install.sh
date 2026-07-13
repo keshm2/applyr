@@ -39,7 +39,7 @@ for pair in "targets" "discord_config"; do
     say "$live exists — keeping it."
   else
     cp "$example" "$live"
-    say "created $live from $example — fill in the placeholders (or run 'ares setup')."
+    say "created $live from $example — fill in the placeholders (or run 'applyr setup')."
   fi
 done
 
@@ -56,18 +56,30 @@ fi
 if [ -f "config/harness.json" ]; then
   say "config/harness.json exists — keeping it ($(jq -r '.harness // "?"' config/harness.json))."
 else
-  if [ "$HAVE_OPENCODE" -eq 1 ]; then
+  HARNESS=""
+  if [ "$HAVE_OPENCODE" -eq 1 ] && [ "$HAVE_CLAUDE" -eq 1 ] && [ -t 0 ]; then
+    # Both agents installed and we can ask — let the user choose.
+    echo
+    echo "Which coding agent should applyr use for runs?"
+    echo "  1) opencode      (detected)"
+    echo "  2) Claude Code   (detected)"
+    echo "  (Codex and GitHub Copilot support is planned — not available yet.)"
+    printf "Choose [1/2, default 1]: "
+    read -r CHOICE || CHOICE=""
+    case "$CHOICE" in
+      2) HARNESS="claude" ;;
+      *) HARNESS="opencode" ;;
+    esac
+  elif [ "$HAVE_OPENCODE" -eq 1 ]; then
     HARNESS="opencode"
   elif [ "$HAVE_CLAUDE" -eq 1 ]; then
     HARNESS="claude"
-  else
-    HARNESS=""
   fi
   if [ -n "$HARNESS" ]; then
     printf '{\n  "harness": "%s"\n}\n' "$HARNESS" > config/harness.json
-    say "wrote config/harness.json (harness: $HARNESS)."
+    say "wrote config/harness.json (harness: $HARNESS — change any time by editing the file or re-running this installer)."
   else
-    say "skipped config/harness.json — no harness detected yet."
+    say "skipped config/harness.json — no supported coding agent detected yet."
   fi
 fi
 
@@ -109,7 +121,7 @@ python3 scripts/generate_agent_definitions.py
 if bash scripts/validate_local_config.sh; then
   say "config valid."
 else
-  warn "config not valid yet — edit the files named above (or run 'ares setup'), then re-run:"
+  warn "config not valid yet — edit the files named above (or run 'applyr setup'), then re-run:"
   warn "  bash scripts/validate_local_config.sh"
 fi
 
@@ -127,4 +139,4 @@ else
   say "node/npm not found — skipping the optional TUI (docs/SETUP.md 3.2)."
 fi
 
-say "done. Next: bash scripts/run_job_agent.sh (or 'ares run')."
+say "done. Next: bash scripts/run_job_agent.sh (or 'applyr run')."

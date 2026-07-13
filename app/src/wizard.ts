@@ -34,7 +34,7 @@ export async function runWizard(root: string, checkOnly: boolean): Promise<numbe
   };
 
   try {
-    console.log("Ares setup wizard — writes config/targets.json and config/discord_config.json.");
+    console.log("applyr setup wizard — writes config/targets.json and config/discord_config.json.");
     console.log("Press enter to accept the [default] shown for any prompt.\n");
 
     // targets.json — start from the live file if present, else the example.
@@ -134,6 +134,6 @@ function runValidatorAndPrint(root: string): boolean {
 }
 
 function report(ok: boolean): number {
-  console.log(ok ? "\nSetup looks good — config is valid." : "\nConfig is not valid yet — fix the ERROR lines above and re-run `ares setup --check`.");
+  console.log(ok ? "\nSetup looks good — config is valid." : "\nConfig is not valid yet — fix the ERROR lines above and re-run `applyr setup --check`.");
   return ok ? 0 : 1;
 }

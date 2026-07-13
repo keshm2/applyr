@@ -1,16 +1,19 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { AresState, Heartbeat } from "../state.js";
-import { theme, statusGlyph } from "../theme.js";
+import type { ApplyrState, Heartbeat } from "../state.js";
+import { theme, statusGlyph, statusColor } from "../theme.js";
 
 interface Props {
-  state: AresState;
+  state: ApplyrState;
   lastRun: string;
   sessionLog?: string;
   unresolvedQueue: number;
   heartbeat?: Heartbeat;
   /** Inside the persistent app the shell owns the title and hints. */
   embedded?: boolean;
+  /** Rows available — tall terminals get a recent-activity panel so the
+   *  screen doesn't feel empty. */
+  contentRows?: number;
 }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -31,12 +34,16 @@ export function StatusScreen({
   unresolvedQueue,
   heartbeat,
   embedded,
+  contentRows = 20,
 }: Props) {
   const counts = { applied: 0, needs_review: 0, failed: 0 };
   for (const job of state.applied) {
     if (job.status in counts) counts[job.status as keyof typeof counts] += 1;
   }
   const healthy = heartbeat ? heartbeat.last_run_exit_code === 0 : null;
+  // Base sections take ~19 rows; anything beyond becomes recent activity.
+  const recentCount = Math.max(0, Math.min(8, contentRows - 21));
+  const recent = recentCount > 0 ? [...state.applied].reverse().slice(0, recentCount) : [];
   return (
     <Box flexDirection="column" paddingX={embedded ? 0 : 1}>
       {embedded ? (
@@ -45,7 +52,7 @@ export function StatusScreen({
         </Text>
       ) : (
         <Text bold color={theme.accent}>
-          Ares — status
+          applyr — status
         </Text>
       )}
 
@@ -101,6 +108,24 @@ export function StatusScreen({
         </Box>
       ) : null}
 
+      {/* Recent activity — only when the terminal has room to spare. */}
+      {recent.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>Recent activity</Text>
+          <Box flexDirection="column" marginTop={1}>
+            {recent.map((job, i) => (
+              <Text key={`${job.job_id}-${i}`} wrap="truncate-end">
+                <Text color={statusColor[job.status] ?? "white"}>
+                  {statusGlyph[job.status] ?? "•"} {job.status.padEnd(13)}
+                </Text>
+                <Text dimColor>{job.date_applied}  </Text>
+                {job.company} — {job.title}
+              </Text>
+            ))}
+          </Box>
+        </Box>
+      ) : null}
+
       {/* Last run footer */}
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Last run: {lastRun}</Text>
@@ -109,7 +134,7 @@ export function StatusScreen({
 
       {embedded ? null : (
         <Box marginTop={1}>
-          <Text dimColor>Open the app with: ares (screens: status · jobs · review · history)</Text>
+          <Text dimColor>Open the app with: applyr (screens: status · jobs · review · history)</Text>
         </Box>
       )}
     </Box>

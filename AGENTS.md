@@ -1,12 +1,25 @@
-# Job Application Agent — Core Rules
+# applyr — Job Application Agent — Core Rules
 
 ## Phase status (keep in sync with docs/PLAN.md's Phase Status Pointer)
-- **Last completed phase:** Phase 8 — scheduler upgrade (2026-07-12).
-  Phases 0–8 are DONE; phases 13 and 15 are partially done.
-- **Completed work item:** TUI manual/automatic modes (2026-07-12).
-- **Implement next:** phase 10 — browser extension (docs/PLAN.md
-  §3.11). Phase 13 remains partial for its deferred publication,
-  provider-setup, and hosted-storage items.
+- **Last completed phase:** Phase 10 — browser extension
+  (2026-07-12; live in-browser autofill pass pending). Phases 0–8
+  and 10 are DONE; phases 13 and 15 are partially done.
+- **Completed work items:** TUI manual/automatic modes (2026-07-12);
+  project rename Ares → applyr + TUI accessibility pass (2026-07-12 —
+  `applyr` is the command/package name, env vars are `APPLYR_*` with
+  legacy `ARES_*` fallbacks); TUI responsive layout + welcome page
+  (2026-07-12 — banner/lists resize with the terminal, Jobs tab
+  opens browsing instead of typing); TUI run controls polish
+  (2026-07-12 — cap tier colors + MAX warning, optional
+  APPLYR_EXTRA_PROMPT per-run instruction); opencode `--print` CLI
+  fix + TUI resize invariant + large-terminal fill (2026-07-12);
+  fetch-efficiency rules (2026-07-12 — see "Fetch efficiency" under
+  Critical rules); installer coding-agent choice (2026-07-12 —
+  Codex/Copilot planned in phase 16).
+- **Implement next:** phase 9 — migration-friendliness review
+  (docs/PLAN.md §3.10, documentation-only). Phase 13 remains partial
+  for its deferred publication, provider-setup, and hosted-storage
+  items.
 - Whoever closes a phase or work item MUST update this block and the
   matching pointer at the top of docs/PLAN.md before stopping.
 
@@ -23,12 +36,18 @@
   re-tailor the same job forever. skipped_unfit is local-only and must
   never be written to applied_jobs.json.
 - Max 25 applications per session (rate limit protection). The TUI's
-  automatic mode may lower this per run via ARES_SESSION_CAP (1–25);
+  automatic mode may lower this per run via APPLYR_SESSION_CAP (1–25;
+  the legacy ARES_SESSION_CAP name is honored as a fallback);
   the cap can never exceed 25. scripts/run_job_agent.sh reads
-  ARES_SESSION_CAP (default 25), clamps values above 25 down to 25,
+  APPLYR_SESSION_CAP (default 25), clamps values above 25 down to 25,
   and falls back to 25 on invalid or below-1 input, then injects the
   effective cap into the run prompt so the orchestrator is explicitly
-  told the per-session limit.
+  told the per-session limit. The runner may also append an optional
+  operator instruction (APPLYR_EXTRA_PROMPT, truncated to 500 chars,
+  set from the TUI's automatic-mode prompt field) to the run prompt.
+  That instruction can narrow or focus a run but NEVER overrides this
+  file, the session cap, or the state-write discipline — if it
+  conflicts with a rule here, the rule wins.
 - Never store passwords, SSNs, or payment info anywhere. If a form requests
   these and they aren't in config/targets.json under "safe_fields", skip the
   job, log it to data/review_queue.json via the state helper (see File
@@ -38,9 +57,26 @@
   needs_review, or failed webhook respectively). After every batch, call
   @discord-reporter to send the summary (summary webhook, or success
   webhook as fallback). Never invoke @discord-reporter for skipped_unfit.
-- ALWAYS canonicalize every scraped raw job into one internal record via the
-  canonical helper (scripts/job_state.py) before any dedup or filtering
-  decision.
+- ALWAYS canonicalize every raw job that survives the deterministic
+  role/level prefilter into one internal record via the canonical helper
+  (scripts/job_state.py) before any dedup or fit decision. A
+  deterministic raw-title prefilter (the role/level keyword rule plus
+  the fetch-efficiency shortlist bound below) MUST run before
+  canonicalization to bound work — prefiltered-out jobs are never
+  recorded, acted on, or mentioned to the user.
+- Fetch efficiency (bounded transcript, bounded work — every run):
+  - Redirect EVERY board fetch and fetch-helper output to a file under
+    logs/tmp/ (mkdir -p logs/tmp first; the runner clears it each run).
+    NEVER print raw posting dumps into the session transcript — after
+    each fetch print only the board name and a line count.
+  - Prefilter deterministically (python/grep over the raw files, using
+    the role/level keyword rule) into logs/tmp/prefiltered.jsonl; only
+    survivors are canonicalized and upserted.
+  - Bound the shortlist: stop adding candidates once the prefiltered
+    shortlist reaches 5x the session cap (minimum 10). Unprocessed raw
+    jobs simply wait for the next scheduled run.
+  - Print at most ~30 shortlist lines (company · title · url) into the
+    transcript when reviewing candidates.
 - ALWAYS upsert each canonical record into data/job_registry.json via the
   canonical helper — never hand-write the registry.
 - ALWAYS run the deterministic JD fit gate on every canonical job after
@@ -341,6 +377,32 @@
 - The review-queue file stays append-only: TUI triage records outcomes
   (applied_jobs append + record-event) and derives "resolved" from
   them — it never deletes queue entries.
+
+## Browser extension surface (phase 10)
+- The Manifest V3 extension in extension/ is the user-driven hybrid
+  mode: the USER browses postings and submits forms; the extension only
+  autofills, shows the fit verdict, and records outcomes.
+- The extension NEVER submits a form. Autofill stops at a filled form;
+  the user reviews and clicks submit themselves. This is the defining
+  safety property of hybrid mode — never weaken it.
+- Autofill values come ONLY from config/targets.json "safe_fields". A
+  field the profile cannot answer is highlighted for the user, never
+  invented. The bridge serves only the specific keys a page's form
+  mapped — never the whole safe_fields map.
+- All extension reads/writes flow through scripts/extension_bridge.py
+  (localhost-only, per-install bearer token in the gitignored
+  config/extension_bridge.json). The bridge itself only shells out to
+  the standard helpers (job_state.py, evaluate_job_fit.py,
+  append_state_entry.sh, sync_internship_tracker.py) — the same write
+  discipline as the agent and the TUI, so hybrid-mode and agent-mode
+  applications dedupe against each other in the same job_key space.
+- Extension-recorded outcomes are "applied" (after the user confirms
+  they submitted) and "needs_review" (save for later). The applied
+  path re-checks can-apply before writing and syncs the tracker
+  best-effort, mirroring the agent path.
+- ATS selector fixups live in extension/src/ats.ts only — one
+  reviewable module for all four families (Greenhouse, Lever, Ashby,
+  Workday). Web-store distribution is out of scope (load unpacked).
 
 ## Internship tracker (Google Sheets) sync
 - The Google Sheet internship tracker is a user-facing record of

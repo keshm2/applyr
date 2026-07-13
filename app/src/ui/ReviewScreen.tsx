@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { loadState, isResolved, isDismissed, registryByJobId, hasAppliedOrFailed, todayIso } from "../state.js";
-import type { AresState, QueueEntry, AppliedJob } from "../state.js";
+import type { ApplyrState, QueueEntry, AppliedJob } from "../state.js";
 import { appendAppliedJob, recordEvent, syncInternshipTracker, openUrl, helperError } from "../helpers.js";
 import { theme, statusGlyph, SELECT_MARKER } from "../theme.js";
 
@@ -15,21 +15,23 @@ interface Props {
   refreshNonce?: number;
   /** Notify the shell that a mutation occurred so top-level badges refresh. */
   onStateChange?: () => void;
+  /** Rows the shell hands this screen — the list grows/shrinks with it. */
+  contentRows?: number;
 }
-
-const VISIBLE = 12;
 
 /**
  * Review-queue triage. The queue file is append-only, so triage records
  * outcomes through the helpers (applied_jobs append + registry event) and
  * derives "resolved" instead of deleting entries.
  */
-export function ReviewScreen({ root, active, refreshNonce, onStateChange }: Props) {
-  const [state, setState] = useState<AresState>(() => loadState(root));
+export function ReviewScreen({ root, active, refreshNonce, onStateChange, contentRows = 20 }: Props) {
+  const [state, setState] = useState<ApplyrState>(() => loadState(root));
   const [cursor, setCursor] = useState(0);
   const [offset, setOffset] = useState(0);
   const [showResolved, setShowResolved] = useState(false);
   const [message, setMessage] = useState("");
+  // Screen-internal chrome: title, selection details, message, pagination.
+  const visible = Math.max(3, Math.min(30, contentRows - 8));
 
   const entries = useMemo(
     () => state.queue.filter((e) => showResolved || !isResolved(state, e)),
@@ -57,14 +59,14 @@ export function ReviewScreen({ root, active, refreshNonce, onStateChange }: Prop
   // window. The cursor may legitimately move outside the first page; this
   // window follows it so there is always a visible selection marker.
   useEffect(() => {
-    const maxOffset = Math.max(0, entries.length - VISIBLE);
+    const maxOffset = Math.max(0, entries.length - visible);
     setOffset((o) => {
-      if (entries.length <= VISIBLE) return 0;
+      if (entries.length <= visible) return 0;
       if (cursor < o) return cursor;
-      if (cursor >= o + VISIBLE) return Math.min(maxOffset, cursor - VISIBLE + 1);
+      if (cursor >= o + visible) return Math.min(maxOffset, cursor - visible + 1);
       return Math.min(o, maxOffset);
     });
-  }, [cursor, entries.length]);
+  }, [cursor, entries.length, visible]);
 
   const refresh = () => {
     const fresh = loadState(root);
@@ -173,9 +175,14 @@ export function ReviewScreen({ root, active, refreshNonce, onStateChange }: Prop
       if (key.downArrow || input === "j")
         return setCursor((c) => Math.min(entries.length - 1, c + 1));
       if (input === "x") return setShowResolved((s) => !s);
-      if (!selected) return;
+      if (!selected) {
+        if (input === "o" || input === "a" || input === "d" || key.return) {
+          setMessage("Queue is empty — nothing selected.");
+        }
+        return;
+      }
       try {
-        if (input === "o") {
+        if (input === "o" || key.return) {
           openUrl(selected.url);
           setMessage(`Opened ${selected.url}`);
         } else if (input === "a") {
@@ -193,7 +200,7 @@ export function ReviewScreen({ root, active, refreshNonce, onStateChange }: Prop
   );
 
   const empty = entries.length === 0;
-  const page = entries.slice(offset, offset + VISIBLE);
+  const page = entries.slice(offset, offset + visible);
 
   return (
     <Box flexDirection="column">
@@ -246,10 +253,10 @@ export function ReviewScreen({ root, active, refreshNonce, onStateChange }: Prop
         </Box>
       ) : null}
 
-      {!empty && entries.length > VISIBLE ? (
+      {!empty && entries.length > visible ? (
         <Box marginTop={1}>
           <Text dimColor>
-            rows {offset + 1}–{Math.min(offset + VISIBLE, entries.length)} of {entries.length} · ↑/↓ to navigate
+            rows {offset + 1}–{Math.min(offset + visible, entries.length)} of {entries.length} · ↑/↓ to navigate
           </Text>
         </Box>
       ) : null}
@@ -257,4 +264,4 @@ export function ReviewScreen({ root, active, refreshNonce, onStateChange }: Prop
   );
 }
 
-export const REVIEW_HINTS = "↑/↓ select · o open · a applied · d dismiss · x resolved";
+export const REVIEW_HINTS = "↑↓ select · enter/o open · a applied · d dismiss · x resolved";

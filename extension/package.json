@@ -1,0 +1,17 @@
+{
+  "name": "applyr-extension",
+  "version": "0.5.5a",
+  "private": true,
+  "description": "applyr browser extension — user-driven hybrid mode: autofill from safe_fields, fit badge, helper-backed outcome recording via the local bridge. Never submits a form.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.0"
+  }
+}

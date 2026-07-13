@@ -4,20 +4,47 @@ The live configs (`config/targets.json`, `config/discord_config.json`) are
 gitignored — they hold personal data and secrets. Start from the shipped
 examples before running the agent.
 
+> **Build:** this document ships with release `0.5.5a`. The
+> full release notes are in [`RELEASE.md`](./RELEASE.md); the
+> project changelog is in [`CHANGELOG.md`](./CHANGELOG.md).
+
 ## 0. Universal install (recommended)
 
-One command from a fresh clone handles sections 1 and 3, detects your
-coding agent, and builds the optional TUI:
+One command from a fresh GitHub download handles sections 1 and 3,
+detects your coding agent, and builds the optional TUI:
 
 ```bash
+# From the unpacked release archive (no git clone required):
 bash scripts/install.sh
 ```
 
-Ares runs under either **opencode** or **Claude Code** (phase 15) — the
-installer detects what you have and writes `config/harness.json`
-(override any time by editing it, or per-run with `ARES_HARNESS=opencode|claude`).
-Then fill in the placeholders (section 2, or `ares setup`) and start a
-run with `bash scripts/run_job_agent.sh`.
+**Downloading the release archive.** The project is named applyr; the
+GitHub repository for this release is still `keshm2/ares`:
+
+```bash
+# zip
+curl -L -o applyr-0.5.5a.zip https://github.com/keshm2/ares/archive/refs/tags/0.5.5a.zip
+unzip applyr-0.5.5a.zip && cd ares-0.5.5a
+
+# or tarball
+curl -L -o applyr-0.5.5a.tar.gz https://github.com/keshm2/ares/archive/refs/tags/0.5.5a.tar.gz
+tar -xzf applyr-0.5.5a.tar.gz && cd ares-0.5.5a
+```
+
+The release page also exposes the standard
+"Source code (zip)" / "Source code (tar.gz)" assets directly — pick
+whichever works behind your network.
+
+applyr runs under your choice of coding agent. Supported today:
+**opencode** and **Claude Code** (phase 15); **Codex** and **GitHub
+Copilot** support is planned (phase 16), with other coding agents to
+follow. The installer detects what you have installed — and when more
+than one supported agent is found, it **asks which one you'd prefer**
+— then writes the choice to `config/harness.json` (change it any time
+by editing that file, re-running the installer, or per-run with
+`APPLYR_HARNESS=opencode|claude`). Then fill in the placeholders
+(section 2, or `applyr setup`) and start a run with
+`bash scripts/run_job_agent.sh`.
 
 Per-harness notes:
 
@@ -146,21 +173,30 @@ helpers.
 cd app
 npm install
 npm run build
-node dist/cli.js help      # or: npm link && ares help
+node dist/cli.js help      # or: npm link && applyr help
 ```
 
 Commands:
 
-- `ares setup` — interactive wizard that writes `config/targets.json`
+- `applyr setup` — interactive wizard that writes `config/targets.json`
   and `config/discord_config.json` (the same files sections 1–2
-  create by hand), then runs the validator. `ares setup --check`
+  create by hand), then runs the validator. `applyr setup --check`
   validates only.
-- `ares status` — outcome counts, pending review queue, last run.
-- `ares review` — triage the review queue: open the posting, mark
+- `applyr status` — outcome counts, pending review queue, last run.
+- `applyr review` — triage the review queue: open the posting, mark
   applied, or dismiss (recorded via the state helpers).
-- `ares history` — browse recorded outcomes.
-- `ares run` — trigger `scripts/run_job_agent.sh` and stream the
+- `applyr history` — browse recorded outcomes.
+- `applyr run` — trigger `scripts/run_job_agent.sh` and stream the
   session log.
+
+The app opens on a **welcome menu** that lets you choose where to go
+first; press `w` any time to come back to it. Inside the app, press
+`?` at any time for the complete keyboard reference. The Jobs
+screen always opens **browsing, never typing**: press `/` to type a
+search query (or `e` in automatic mode to type the run cap), and
+`Esc` to stop typing — `Esc` never quits the app; quit with `q`
+(asks for confirmation while a run is active). The banner and all
+lists resize with the terminal.
 
 **Modes.** The app always launches in **manual mode**. Press `m` to
 toggle between manual and automatic; the active mode is always visible
@@ -174,10 +210,22 @@ in the shell.
   through the helpers).
 - **Automatic mode** — agent-driven cycle: before a run can start you
   must enter how many applications this cycle may submit (1–25). The
-  runner receives the count as `ARES_SESSION_CAP` and the run prompt
+  runner receives the count as `APPLYR_SESSION_CAP` and the run prompt
   carries the per-cycle cap. The cap can lower, never raise, the
   25-per-session maximum; `run_job_agent.sh` clamps any value above
   25 down to 25 and falls back to 25 on invalid or below-1 input.
+  The cap is tier-colored by cost (light / standard / heavy) and 25
+  shows an animated **MAX** warning — a full-cap run eats through
+  your token budget. Press `p` to add an optional extra prompt for
+  the agent (sent as `APPLYR_EXTRA_PROMPT`, 500-char cap); empty
+  means the standard workflow. It can focus a run but never overrides
+  `AGENTS.md`, the state-write discipline, or the session cap.
+
+**Small test cycle (recommended first run):** open `applyr`, press
+any key, then `2` (Jobs) → `m` (AUTO) → `e` → type `5` → `enter` →
+optionally `p` for an instruction → `s`. The run streams its session
+log into the screen; outcomes land in Status / Review / History and
+Discord as usual.
 
 npm publication (`npx`-based first run) is deferred until the package
 name and scope are settled — for now install from the repo as above.
@@ -188,7 +236,7 @@ Run the agent every 30 minutes, 24/7, via a launchd user agent
 (macOS). Overlap protection lives in `run_job_agent.sh` itself: a tick
 that lands while a run is in flight logs `skipped_overlap` and exits 0
 (no second agent), a dead holder's lock is reclaimed immediately, and
-a hung run older than 60 minutes (`ARES_LOCK_MAX_AGE_MIN`) is
+a hung run older than 60 minutes (`APPLYR_LOCK_MAX_AGE_MIN`) is
 terminated and reclaimed so a wedged run never blocks the schedule.
 
 ```bash
@@ -213,10 +261,73 @@ On Linux, create the equivalent systemd user timer by hand
    `skipped_overlap` / `stale_lock_reclaimed` / `FAILED` entries.
 3. `logs/session_<timestamp>.log` — the full transcript of a specific
    run (start line, harness, transcript, end marker). Only the newest
-   30 are kept (`ARES_KEEP_SESSION_LOGS`).
+   30 are kept (`APPLYR_KEEP_SESSION_LOGS`).
 
 The 25-applications-per-session cap is unchanged — the cadence changes
 how often runs happen, never how much one run may apply.
+
+## 3.6 Browser extension — hybrid mode (Phase 10, optional)
+
+A Chrome (Manifest V3) extension for user-driven applications: you
+browse postings yourself; the extension autofills forms from your
+`safe_fields`, shows the deterministic fit verdict as a badge, and
+records outcomes into the same local state as the agent — so manual
+and automatic applications dedupe against each other.
+
+**Safety model (how it is wired, not a suggestion):**
+
+- The extension **never submits a form**. Autofill stops at a filled
+  form; you review and click submit yourself.
+- Values come **only** from `config/targets.json "safe_fields"`.
+  Fields the profile cannot answer are highlighted amber — never
+  invented.
+- All reads/writes go through a **localhost-only bridge**
+  (`scripts/extension_bridge.py`) authenticated by a per-install token;
+  the bridge only shells out to the repo's standard state helpers.
+
+**1. Start the bridge** (from the repo root):
+
+```bash
+python3 scripts/extension_bridge.py
+```
+
+The first start generates `config/extension_bridge.json` (gitignored,
+`chmod 600`) with the per-install token and default port `8377`.
+Print the token any time with
+`python3 scripts/extension_bridge.py --show-token`. Leave the bridge
+running while you use the extension.
+
+**2. Build and load the extension:**
+
+```bash
+cd extension
+npm install
+npm run build
+```
+
+Then in Chrome: `chrome://extensions` → enable **Developer mode** →
+**Load unpacked** → select `extension/dist/`. (Web-store distribution
+is deliberately deferred.)
+
+**3. Connect it:** open the extension's **Options** page, paste the
+bridge token, and click **Test connection**.
+
+**4. Use it:** on a posting hosted by Greenhouse, Lever, Ashby, or
+Workday, a small **applyr** panel appears (bottom-right):
+
+- **Fit check** — extracts the posting and shows the phase 4 verdict
+  (`candidate` / `needs_review` / `skipped_unfit` + score), plus a
+  warning if you already applied to this job.
+- **Autofill from profile** — fills mapped, empty fields (green
+  outline) and highlights required fields it can't answer (amber).
+  It never overwrites anything you typed.
+- **Save for review** — records a `needs_review` entry (applied log +
+  review queue + event), same as saving from the TUI search.
+- **I submitted this — record it** — after you actually submit,
+  records an `applied` outcome (dedup-guarded) and best-effort syncs
+  the Google Sheet tracker.
+
+If the panel reports "bridge unreachable", start the bridge (step 1).
 
 ## 4. Google Sheets sync (Phase 3, optional)
 
@@ -260,7 +371,7 @@ for service-account Sheets writes.
 1. Open the Google Cloud Console → **APIs & Services → Library** and
    enable the **Google Sheets API** for your project.
 2. Go to **APIs & Services → Credentials → Create credentials →
-   Service account**. Give it any name (e.g. `ares-tracker-sync`).
+   Service account**. Give it any name (e.g. `applyr-tracker-sync`).
 3. Open the new service account → **Keys → Add key → Create new key →
    JSON**. A JSON key file downloads.
 4. Move the downloaded key to the repo:
@@ -275,7 +386,7 @@ for service-account Sheets writes.
 ### 4.4 Share the Google Sheet with the service account
 
 Open the service-account key JSON and copy the `client_email` value
-(e.g. `ares-tracker-sync@your-project.iam.gserviceaccount.com`). Open
+(e.g. `applyr-tracker-sync@your-project.iam.gserviceaccount.com`). Open
 your Google Sheet → **Share** → paste that email → give it **Editor**
 access. The helper cannot write until the sheet is shared with this
 email.

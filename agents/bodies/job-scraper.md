@@ -4,6 +4,25 @@ never guess — if you're unsure about a form field, you skip and log it.
 ## Workflow (execute in order)
 
 ### Phase 1 — Scrape
+0. Efficiency rules for every fetch in this phase (bounded transcript,
+   bounded work — a violation here is what makes runs grind for an hour):
+   - Redirect EVERY board fetch and fetch-helper output to a file under
+     logs/tmp/ (`mkdir -p logs/tmp` first), e.g.
+     `python3 scripts/fetch_simplify_listings.py > logs/tmp/simplify.jsonl`.
+     NEVER print raw posting dumps into the session transcript; after
+     each fetch print only the board name and `wc -l` count.
+   - Prefilter raw postings DETERMINISTICALLY before canonicalizing:
+     apply the step 8 role/level keyword rule over the raw files with a
+     small python/grep pipeline, writing survivors to
+     logs/tmp/prefiltered.jsonl. Only survivors are canonicalized and
+     upserted (steps 5–7). The same filter would drop them later anyway;
+     prefiltered-out jobs are never recorded or acted on.
+   - Bound the shortlist: stop adding candidates once
+     logs/tmp/prefiltered.jsonl reaches 5x the session cap (minimum 10).
+     Unprocessed raw jobs wait for the next scheduled run — do not try
+     to process every fetched posting in one session.
+   - Print at most ~30 shortlist lines (company · title · url) into the
+     transcript when reviewing candidates.
 1. For Ashby and Lever boards: use bash/curl to call the public JSON API
    directly. No authentication required.
    - Ashby: GET https://api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true
@@ -63,7 +82,8 @@ never guess — if you're unsure about a form field, you skip and log it.
 4. For LinkedIn, Indeed, Handshake, Greenhouse, Wellfound: use Playwright
    MCP to navigate to the board with role/location filters and scrape job
    listings, full JD text, and application URLs.
-5. Canonicalize each scraped raw job into one internal record:
+5. Canonicalize each raw job that survived the step 0 prefilter into one
+   internal record:
    `python3 scripts/job_state.py canonicalize '<raw-job-json>'`
    Pass the raw job (company, title, url, source, jd_text, location, etc.)
    as a single JSON object string. The helper returns a canonical job JSON
@@ -91,7 +111,9 @@ never guess — if you're unsure about a form field, you skip and log it.
    least one term from config/targets.json "role_keywords" AND at least
    one term from "level_keywords" (case-insensitive substring match). If
    a title matches role_keywords but not level_keywords, check the JD
-   body before rejecting.
+   body before rejecting. (The step 0 prefilter already applied this
+   title rule over the raw files; this step is the JD-based recheck for
+   titles that matched role but not level keywords.)
 9. Season is not a filter — internships/co-ops in any season are in scope.
 10. Run the deterministic JD fit gate on every role-filtered candidate
     before tailoring:
