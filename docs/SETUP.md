@@ -15,16 +15,25 @@ detects your coding agent, asks for your profile, and builds the
 optional TUI:
 
 ```bash
-# Easiest — downloads into ~/applyr and runs the installer:
+# Easiest — one command: downloads into ~/applyr, runs the installer,
+# and puts the `applyr` command on your PATH (~/.local/bin):
 curl -fsSL https://raw.githubusercontent.com/keshm2/ares/main/scripts/install.sh | bash
 
 # Or from an unpacked release archive (no git clone required):
 bash scripts/install.sh
 
-# Or via npm (installs the `applyr` TUI command; it points you at the
-# core installer above on first run if no core is found):
+# Or via npm (installs the `applyr` TUI command; on first run with no
+# core it offers to download the core for you):
 npm install -g @keshm2/applyr@alpha
 ```
+
+**Automatic updates.** Every scheduled run and every `applyr` launch
+checks the `VERSION` file on GitHub `main` and self-updates when a
+newer build was pushed (fail-open — no network just means no update).
+Git checkouts fast-forward pull; archive installs overlay the new
+tarball; live config, `data/`, `logs/`, and `resumes/` are never
+touched. Run one manually with `applyr update` (or
+`bash scripts/update.sh`); opt out with `APPLYR_AUTO_UPDATE=0`.
 
 The installer also prompts for your profile (the `safe_fields` used to
 fill application forms) and creates a `resumes/` folder at the project

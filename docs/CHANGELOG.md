@@ -7,6 +7,36 @@ but trimmed to fit a small in-repo doc.
 > Per-`docs/RELEASE.md` is the canonical, deep-dive release
 > document for each tagged build. This file is the index.
 
+## [Unreleased] — on `main`
+
+### Added
+
+- **Phase 16 — multi coding-agent support.** Codex CLI and GitHub
+  Copilot CLI adapters in `run_job_agent.sh`; 4-agent installer
+  detection; harness capability matrix + mandatory degraded paths in
+  `AGENTS.md`; conformance suite (`scripts/run_conformance.py`) with
+  results in `docs/SETUP.md` §3.8.
+- **One-command install.** The cURL one-liner now ends with a working
+  `applyr` command: the installer writes a wrapper to
+  `~/.local/bin/applyr` (override with `APPLYR_BIN`) pinned to the
+  install via `APPLYR_ROOT`. An npm-installed `applyr` with no core
+  offers to download the core itself instead of printing
+  instructions.
+- **Automatic updates.** New root `VERSION` file and
+  `scripts/update.sh`: compares local vs GitHub `main`, then
+  fast-forward pulls (git checkouts) or overlays the main tarball
+  (archive installs); regenerates agent definitions, revalidates
+  config, and rebuilds the TUI afterwards. Per-user files are never
+  touched. Hooked fail-open into every scheduled run (self-update,
+  then re-exec the new runner; `APPLYR_SKIP_UPDATE` guards the loop)
+  and every interactive `applyr` launch (2.5 s check budget). New
+  `applyr update` command; `APPLYR_AUTO_UPDATE=0` opts out. Updater
+  is single-flight with a 30-min stale-lock reclaim.
+- **Phase 9 — migration-friendliness review.** Single-user
+  assumption, per-user vs project-owned file table, and future
+  multi-user seams documented in `AGENTS.md`; two-users-per-machine
+  note in `docs/SETUP.md` §3.7.
+
 ## [0.7.8a] — 2026-07-12
 
 npm package: **`@keshm2/applyr` version `0.7.8-alpha.0`** (the

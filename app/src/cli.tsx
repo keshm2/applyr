@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import React from "react";
 import { render } from "ink";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import readline from "node:readline/promises";
+import { spawnSync } from "node:child_process";
 import { findProjectRoot } from "./project.js";
 import { loadState, isResolved, lastRunLine, latestSessionLog, readHeartbeat } from "./state.js";
 import { App, type Tab } from "./ui/App.js";
@@ -17,12 +22,81 @@ Usage: applyr [command]
   status            one-shot pipeline overview (scripting/CI friendly)
   run               trigger a run in the current terminal (no app shell)
   setup [--check]   interactive config wizard; --check only validates
+  update            check upstream and self-update now
   help              show this help
+
+Updates auto-install on every app launch and scheduled run
+(APPLYR_AUTO_UPDATE=0 disables).
 
 Inside the app, press ? for the full key reference.
 
 State writes go through the repo's Python/bash helpers — the TUI never
 edits state JSON directly. Set APPLYR_ROOT to run outside the repo.`;
+
+const VERSION_URL = "https://raw.githubusercontent.com/keshm2/ares/main/VERSION";
+const BOOTSTRAP_URL = "https://raw.githubusercontent.com/keshm2/ares/main/scripts/install.sh";
+
+/** Auto-update on launch: compare the local VERSION to upstream main and
+ *  run scripts/update.sh when they differ. Strictly fail-open — a dead
+ *  network, missing VERSION, or slow GitHub never delays launch more
+ *  than the 2.5 s fetch timeout, and APPLYR_AUTO_UPDATE=0 skips it. */
+async function maybeSelfUpdate(root: string): Promise<void> {
+  if (process.env.APPLYR_AUTO_UPDATE === "0" || process.env.ARES_AUTO_UPDATE === "0") return;
+  if (!process.stdout.isTTY) return; // never in piped/CI renders
+  try {
+    const local = fs.readFileSync(path.join(root, "VERSION"), "utf8").trim();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    const res = await fetch(VERSION_URL, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return;
+    const remote = (await res.text()).trim();
+    if (!remote || remote === local) return;
+    console.log(`applyr ${local} → ${remote} is available — updating…`);
+    const r = spawnSync("bash", ["scripts/update.sh", "--auto"], {
+      cwd: root,
+      stdio: "inherit",
+    });
+    if (r.status === 0) {
+      console.log("Update installed — this session still runs the old build; restart applyr to load it.\n");
+    }
+  } catch {
+    /* fail-open — updating is a convenience, never a launch blocker */
+  }
+}
+
+/** No core checkout found: offer to install it right here (one-command
+ *  promise), falling back to printed instructions on a non-TTY. */
+async function bootstrapCore(): Promise<string | null> {
+  const target = process.env.APPLYR_HOME ?? path.join(os.homedir(), "applyr");
+  const oneLiner = `curl -fsSL ${BOOTSTRAP_URL} | bash`;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error(
+      "applyr: no applyr core found. Install it with one command:\n\n" +
+        `  ${oneLiner}\n\n` +
+        `(installs to ${target}; set APPLYR_HOME to change, or APPLYR_ROOT to point\n` +
+        "at an existing checkout), then re-run applyr.",
+    );
+    return null;
+  }
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  let answer: string;
+  try {
+    answer = (await rl.question(`applyr: no core found. Download it to ${target} now? [Y/n] `)).trim();
+  } finally {
+    rl.close();
+  }
+  if (answer.toLowerCase() === "n") {
+    console.log(`Skipped. Install later with: ${oneLiner}`);
+    return null;
+  }
+  const r = spawnSync("bash", ["-c", oneLiner], { stdio: "inherit" });
+  if (r.status !== 0 || !fs.existsSync(path.join(target, "AGENTS.md"))) {
+    console.error("applyr: core install did not complete — see the output above.");
+    return null;
+  }
+  return target;
+}
 
 /** Ensure non-TTY stdout has flushed so process.exit() doesn't truncate
  *  piped/CI output from one-shot renders. */
@@ -92,19 +166,27 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  // npm-installed global `applyr` with no core checkout: point at the
-  // one-line core installer instead of a bare stack trace.
+  // npm-installed global `applyr` with no core checkout: offer to install
+  // the core right here (interactive), or print the one-liner (piped).
   let root: string;
   try {
     root = findProjectRoot();
   } catch {
-    console.error(
-      "applyr: no applyr core found. Install it with one command:\n\n" +
-        "  curl -fsSL https://raw.githubusercontent.com/keshm2/ares/main/scripts/install.sh | bash\n\n" +
-        "(installs to ~/applyr; set APPLYR_HOME to change, or APPLYR_ROOT to point\n" +
-        "at an existing checkout), then run `applyr` from that directory.",
-    );
-    return 1;
+    const installed = await bootstrapCore();
+    if (!installed) return 1;
+    root = installed;
+  }
+
+  switch (command) {
+    case "":
+      // Auto-update only on a plain app open — one-shot commands
+      // (status/run/review) stay instant and scriptable.
+      await maybeSelfUpdate(root);
+      break;
+    case "update": {
+      const r = spawnSync("bash", ["scripts/update.sh"], { cwd: root, stdio: "inherit" });
+      return r.status ?? 1;
+    }
   }
 
   switch (command) {

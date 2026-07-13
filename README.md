@@ -93,44 +93,47 @@ the rules auditable and the state recoverable.
 | **State** | Local JSON + JSONL under `data/` (gitignored) |
 | **Caps** | 25 applications per session (TUI may lower per run via `APPLYR_SESSION_CAP`) |
 
-## Install / first run (from GitHub, no `git clone`)
-
-Three ways in — all end at the same interactive installer, which asks
-for your coding agent and your profile (kept **locally only**).
-
-**Option 1 — cURL one-liner (recommended):**
+## Install — one command
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/keshm2/ares/main/scripts/install.sh | bash
 ```
 
-Downloads the source into `~/applyr` (override with `APPLYR_HOME`) and
-runs the installer from inside it.
+That single command downloads applyr into `~/applyr` (override with
+`APPLYR_HOME`), asks for your coding agent and your profile (kept
+**locally only**), creates the `resumes/` PDF drop-folder, builds the
+TUI, and puts the **`applyr` command on your PATH**
+(`~/.local/bin/applyr`). When it finishes, type `applyr` and you're in.
 
-**Option 2 — bash, from a downloaded release:**
-
-```bash
-# The project is named applyr; the GitHub repository is still keshm2/ares.
-curl -L -o applyr-0.7.8a.zip https://github.com/keshm2/ares/archive/refs/tags/0.7.8a.zip
-unzip applyr-0.7.8a.zip
-cd ares-0.7.8a
-bash scripts/install.sh
-```
-
-(The same works with the `.tar.gz` asset and `tar -xzf`.)
-
-**Option 3 — npm (the TUI command):**
+Prefer npm? Same result:
 
 ```bash
 # The unscoped npm name "applyr" belongs to an unrelated package —
 # install the scoped one. The command it installs is still `applyr`.
 npm install -g @keshm2/applyr@alpha
-applyr        # no core found? it prints the one-line core installer above
+applyr        # no core found → it offers to download it for you
 ```
 
-npm installs the `applyr` terminal UI globally; the agent core still
-lives in a local directory (`~/applyr` via option 1, or any unpacked
-release — point `APPLYR_ROOT` at it to run `applyr` from anywhere).
+Or fully manual, from a release archive:
+
+```bash
+# The project is named applyr; the GitHub repository is still keshm2/ares.
+curl -L -o applyr-0.7.8a.zip https://github.com/keshm2/ares/archive/refs/tags/0.7.8a.zip
+unzip applyr-0.7.8a.zip && cd ares-0.7.8a && bash scripts/install.sh
+```
+
+## Automatic updates
+
+Every install keeps itself current: each scheduled run and each
+`applyr` launch checks the `VERSION` file on GitHub `main` and, when a
+newer build has been pushed, installs it automatically before
+continuing (git checkouts fast-forward pull; archive installs overlay
+the new tarball — your `config/`, `data/`, `logs/`, and `resumes/` are
+never touched). The check is fail-open: no network simply means no
+update, never a blocked run.
+
+- `applyr update` — check and update right now.
+- `APPLYR_AUTO_UPDATE=0` — opt out of automatic updates.
 
 `scripts/install.sh` is non-destructive:
 

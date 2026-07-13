@@ -33,7 +33,11 @@
   release 0.7.8a (2026-07-12 — npm package is **@keshm2/applyr**
   0.7.8-alpha.0, the unscoped `applyr` npm name is owned by an
   unrelated package; README banner + agent artwork in docs/assets/;
-  npm publish pending `npm login`).
+  npm publish pending `npm login`); one-command install +
+  auto-update (2026-07-13 — root `VERSION` + `scripts/update.sh`,
+  auto-hooked into runs and TUI launches with APPLYR_AUTO_UPDATE=0
+  opt-out, installer writes the `applyr` wrapper to ~/.local/bin;
+  releases must bump root `VERSION` to trigger client updates).
 - **Implement next:** phase 12 — multi-agent cost tiering
   (docs/PLAN.md §3.13), the second beta build item. Phase 13 remains
   partial (npm publish pending `npm login`; provider-setup and

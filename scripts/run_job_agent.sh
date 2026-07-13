@@ -15,6 +15,24 @@ rm -rf logs/tmp && mkdir -p logs/tmp
 
 RUN_LOG="logs/run_job_agent.log"
 
+# --- Auto-update (fail-open; set APPLYR_AUTO_UPDATE=0 to disable) ------------
+# Every scheduled tick checks upstream main and self-updates before doing
+# anything else, so client installs track pushed updates automatically. A
+# dead network or in-progress update never blocks the run (update.sh
+# --auto always exits 0). Runs BEFORE the lock so the post-update re-exec
+# starts with clean lock state; APPLYR_SKIP_UPDATE=1 on the re-exec
+# prevents an update loop.
+if [ "${APPLYR_AUTO_UPDATE:-${ARES_AUTO_UPDATE:-1}}" != "0" ] && [ "${APPLYR_SKIP_UPDATE:-}" != "1" ]; then
+  UPDATE_RESULT="$(bash scripts/update.sh --auto 2>>"$RUN_LOG" | tail -1 || true)"
+  echo "[$(date)] $UPDATE_RESULT" >> "$RUN_LOG"
+  case "$UPDATE_RESULT" in
+    "update: updated"*)
+      echo "[$(date)] re-executing updated runner" >> "$RUN_LOG"
+      exec env APPLYR_SKIP_UPDATE=1 bash "$PROJECT_ROOT/scripts/run_job_agent.sh"
+      ;;
+  esac
+fi
+
 # --- Overlap protection (portable, macOS-safe, no flock) --------------------
 # mkdir is atomic on macOS/Linux, so a lock directory is a portable lock.
 # A pid file inside it lets us detect and reclaim a stale lock left by a
