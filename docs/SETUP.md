@@ -344,6 +344,22 @@ Workday, a small **applyr** panel appears (bottom-right):
 
 If the panel reports "bridge unreachable", start the bridge (step 1).
 
+## 3.7 Two users on one machine (Phase 9)
+
+applyr is **single-user by design**: everything personal lives in the
+clone (`config/`, `data/`, `logs/`, `resumes/`, `.playwright-mcp/`).
+To run applyr for two people on one machine, use **two separate
+clones** (e.g. `~/applyr-alice` and `~/applyr-bob`), each with its own
+configs, state, and resumes — point the TUI at the right one with
+`APPLYR_ROOT`. One caveat: the 30-minute launchd schedule (§3.5) uses
+the fixed label `com.applyr.job-agent`, so only **one** clone per
+macOS user account can have the always-on schedule installed; run the
+second clone on demand (`bash scripts/run_job_agent.sh`) or from
+another OS user account. Profile-based multi-user (one install, many
+profiles) is deliberately deferred to a future phase — see the
+"Single-user deployment" section of `AGENTS.md` for the seams a
+future migration would use.
+
 ## 4. Google Sheets sync (Phase 3, optional)
 
 The agent can append every successful application to a Google Sheet

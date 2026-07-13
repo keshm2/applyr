@@ -1,9 +1,11 @@
 # applyr — Job Application Agent — Core Rules
 
 ## Phase status (keep in sync with docs/PLAN.md's Phase Status Pointer)
-- **Last completed phase:** Phase 10 — browser extension
-  (2026-07-12; live in-browser autofill pass pending). Phases 0–8
-  and 10 are DONE; phases 13 and 15 are partially done.
+- **Last completed phase:** Phase 9 — migration-friendliness review
+  (2026-07-12, documentation-only: single-user assumption + file
+  table + seams list below, SETUP.md §3.7 two-users note). Phases
+  0–10 are DONE (phase 10's live autofill pass pending); phases 13
+  and 15 are partially done.
 - **Completed work items:** TUI manual/automatic modes (2026-07-12);
   project rename Ares → applyr + TUI accessibility pass (2026-07-12 —
   `applyr` is the command/package name, env vars are `APPLYR_*` with
@@ -30,12 +32,64 @@
   0.7.8-alpha.0, the unscoped `applyr` npm name is owned by an
   unrelated package; README banner + agent artwork in docs/assets/;
   npm publish pending `npm login`).
-- **Implement next:** phase 9 — migration-friendliness review
-  (docs/PLAN.md §3.10, documentation-only). Phase 13 remains partial
-  for its deferred publication, provider-setup, and hosted-storage
-  items.
+- **Implement next:** phase 16 — multi coding-agent support (Codex +
+  GitHub Copilot, docs/PLAN.md §3.17), the first beta build item.
+  Phase 13 remains partial (npm publish pending `npm login`;
+  provider-setup and hosted storage deferred).
 - Whoever closes a phase or work item MUST update this block and the
   matching pointer at the top of docs/PLAN.md before stopping.
+
+## Single-user deployment (phase 9)
+
+**applyr runs as one user on one machine.** State files in `data/`,
+live configs in `config/`, logs in `logs/`, and the resume folders
+(`resumes/`, `data/resumes/`) are all implicitly per-user — there is
+no profile abstraction and none should be introduced without an
+explicitly approved phase. Two people who want to run applyr on the
+same machine today do so via **two separate clones** with two
+separate configs (see docs/SETUP.md "Two users on one machine");
+profile-based multi-user is a deliberately deferred future migration.
+
+### Per-user vs. project-owned files
+
+| Class | Files | Notes |
+| --- | --- | --- |
+| Per-user: live config | `config/targets.json`, `config/discord_config.json`, `config/google_sheets_config.json`, `config/service-account-key.json`, `config/harness.json`, `config/extension_bridge.json`, `.claude/settings.json` | All gitignored; hold PII/secrets/per-machine choices |
+| Per-user: runtime state | `data/applied_jobs.json`, `data/review_queue.json`, `data/job_registry.json`, `data/job_events.jsonl` | Written only by the `scripts/` helpers |
+| Per-user: personal documents | `resumes/` (root PDF drop-folder), `data/resumes/` (markdown resumes + cover letter) | Gitignored PII |
+| Per-user: logs + heartbeat | `logs/` (`run_job_agent.log`, `session_*.log`, `heartbeat.json`, `launchd.{out,err}.log`, `tmp/`) | Retention pruned by the runner |
+| Per-user: browser artifacts | `.playwright-mcp/` | Playwright profile/session state |
+| Per-user: schedule | `~/Library/LaunchAgents/com.applyr.job-agent.plist` | Lives outside the repo; label is fixed (see seams) |
+| Project-owned | `scripts/`, `agents/` (+ generated `.claude/agents/`, `.opencode/agents/`), `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/SETUP.md`, `docs/RELEASE.md`, `docs/CHANGELOG.md`, `config/*.example.json`, `config/{ashby,lever}_vetted_slugs.json`, `requirements.txt`, `opencode.jsonc`, `.mcp.json`, `app/`, `extension/`, `.github/`, `.gitignore` | Committed; identical across users |
+| Project-owned, local-only | `docs/PLAN.md` | Gitignored by design (plan/handoff doc), but not per-user data |
+
+### Future multi-user seams (documented only — do NOT parameterize now)
+
+A future profile-based migration would need exactly these paths to
+become parameters; every one is read from a single, mechanical place
+today:
+
+- **Config paths** — `config/*.json`, read directly by
+  `validate_local_config.sh`, the agent prompts, `install.sh`, and
+  the TUI wizard/state readers.
+- **Runtime data directory** — `data/`; `job_state.py` defaults are
+  module constants overridable per-call via `--registry` / `--events`
+  / `--applied` CLI flags, and `append_state_entry.sh` takes the
+  target file as its first argument.
+- **Log directory + heartbeat** — `logs/` in `run_job_agent.sh` and
+  the `HEARTBEAT = "logs/heartbeat.json"` constant in
+  `write_heartbeat.py`.
+- **Playwright profile directory** — `.playwright-mcp/`.
+- **Google service-account key path** — the
+  `service_account_key_path` field inside
+  `config/google_sheets_config.json`.
+- **Resume folders** — root `resumes/` and `data/resumes/`.
+- **launchd label** — `com.applyr.job-agent` is fixed in
+  `scheduler.sh`, so two clones cannot both install the 30-minute
+  schedule today; a second install would need a per-clone label.
+- **TUI root** — already parameterized: `$APPLYR_ROOT` (legacy
+  `$ARES_ROOT`) selects the project root, the ready-made pattern for
+  the other seams.
 
 ## Critical rules (never break these)
 - ALWAYS read data/applied_jobs.json before starting any application run.
