@@ -99,29 +99,33 @@ python3 scripts/job_state.py ensure-files \
 python3 scripts/generate_agent_definitions.py --check \
   || echo "[$(date)] WARNING: generated agent definitions are stale — run scripts/generate_agent_definitions.py" >> "$RUN_LOG"
 
-# --- Harness selection (Phase 15) -------------------------------------------
+# --- Harness selection (Phase 15 + 16) ---------------------------------------
 # Priority: $APPLYR_HARNESS > config/harness.json > auto-detect (opencode,
-# then claude). The harness only supplies LLM orchestration; every board
-# fetch, helper, and state write is identical downstream.
+# claude, codex, copilot — full-capability harnesses first). The harness only
+# supplies LLM orchestration; every board fetch, helper, and state write is
+# identical downstream. Codex and Copilot run the documented degraded path
+# (no subagent registry, no browser automation by default) — see the
+# "Harness capability matrix" in AGENTS.md.
 HARNESS="${APPLYR_HARNESS:-${ARES_HARNESS:-}}"
 if [ -z "$HARNESS" ] && [ -f "config/harness.json" ]; then
   HARNESS="$(jq -r '.harness // empty' config/harness.json 2>/dev/null || true)"
 fi
 if [ -z "$HARNESS" ]; then
-  if command -v opencode >/dev/null 2>&1; then
-    HARNESS="opencode"
-  elif command -v claude >/dev/null 2>&1; then
-    HARNESS="claude"
-  fi
+  for CANDIDATE in opencode claude codex copilot; do
+    if command -v "$CANDIDATE" >/dev/null 2>&1; then
+      HARNESS="$CANDIDATE"
+      break
+    fi
+  done
 fi
 case "$HARNESS" in
-  opencode|claude) ;;
+  opencode|claude|codex|copilot) ;;
   "")
-    echo "[$(date)] ABORTED: no supported harness found (opencode or claude). Install one or set config/harness.json." >> "$RUN_LOG"
+    echo "[$(date)] ABORTED: no supported harness found (opencode, claude, codex, or copilot). Install one or set config/harness.json." >> "$RUN_LOG"
     exit 1
     ;;
   *)
-    echo "[$(date)] ABORTED: unsupported harness '$HARNESS' (supported: opencode, claude)." >> "$RUN_LOG"
+    echo "[$(date)] ABORTED: unsupported harness '$HARNESS' (supported: opencode, claude, codex, copilot)." >> "$RUN_LOG"
     exit 1
     ;;
 esac
@@ -197,13 +201,26 @@ if [ "$HARNESS" = "opencode" ]; then
     $OPENCODE_PRINT_FLAG \
     "$RUN_PROMPT" \
     >> "$SESSION_LOG" 2>&1 || RUN_RC=$?
-else
+elif [ "$HARNESS" = "claude" ]; then
   # Claude Code headless: CLAUDE.md (canonical rules pointer) and the
   # .claude/agents/ subagents load automatically; the orchestrator body is
   # the shared source read explicitly since -p mode has no --agent flag.
   claude -p \
     "You are the job-scraper orchestrator. Read agents/bodies/job-scraper.md and execute it exactly as your instructions. $RUN_PROMPT" \
     >> "$SESSION_LOG" 2>&1 || RUN_RC=$?
+else
+  # Codex / Copilot (Phase 16): no subagent registry and no browser
+  # automation by default, so the prompt names the inline-subagent fallback
+  # and the degraded board path explicitly. Both CLIs read AGENTS.md as
+  # project instructions; approval/sandbox settings live in the user's own
+  # agent config (documented in docs/SETUP.md per-agent quickstarts) —
+  # this adapter stays thin on purpose.
+  DEGRADED_PROMPT="You are the job-scraper orchestrator. Read agents/bodies/job-scraper.md and execute it exactly as your instructions. Your harness has no subagent registry: when the workflow delegates to @resume-tailor or @discord-reporter, read agents/bodies/resume-tailor.md or agents/bodies/discord-reporter.md and perform that role inline, following it exactly. Unless browser-automation tools are actually available to you, apply the degraded harness path from AGENTS.md 'Harness capability matrix': fetch API-fed boards only, and route any job whose application requires a browser to needs_review — never silently skip it and never attempt a browser apply. $RUN_PROMPT"
+  if [ "$HARNESS" = "codex" ]; then
+    codex exec "$DEGRADED_PROMPT" >> "$SESSION_LOG" 2>&1 || RUN_RC=$?
+  else
+    copilot -p "$DEGRADED_PROMPT" --allow-all-tools >> "$SESSION_LOG" 2>&1 || RUN_RC=$?
+  fi
 fi
 
 # --- Health marker + heartbeat (Phase 8) -------------------------------------

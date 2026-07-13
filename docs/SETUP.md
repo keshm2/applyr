@@ -360,6 +360,68 @@ profiles) is deliberately deferred to a future phase — see the
 "Single-user deployment" section of `AGENTS.md` for the seams a
 future migration would use.
 
+## 3.8 Per-agent quickstarts (Phase 16)
+
+applyr runs under any of the four major coding agents. Pick one,
+install it, run `bash scripts/install.sh`, and the installer detects
+it and writes `config/harness.json` (asking when more than one is
+present). Change agents any time by editing that file or setting
+`APPLYR_HARNESS=opencode|claude|codex|copilot` per run. The business
+logic is identical under every agent — only the thin adapter in
+`scripts/run_job_agent.sh` differs; capability differences and the
+degraded paths are defined in `AGENTS.md` "Harness capability
+matrix".
+
+- **opencode** (full capability) — install per
+  [opencode.ai](https://opencode.ai). Agents load from
+  `.opencode/agents/`, models from `opencode.jsonc`, Playwright MCP
+  is configured there. Runs `opencode run --agent job-scraper`.
+- **Claude Code** (full capability) — install per
+  [claude.com/claude-code](https://claude.com/claude-code). Subagents
+  load from `.claude/agents/`, Playwright MCP from `.mcp.json`.
+  Headless runs need pre-approved permissions in
+  `.claude/settings.json` — the installer offers to create it (asks
+  first; it grants broad repo-local tool access). Runs `claude -p`.
+- **Codex CLI** (degraded path) — install per
+  [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli).
+  Codex reads `AGENTS.md` natively. No subagent registry (the run
+  prompt tells it to perform the subagent roles inline from
+  `agents/bodies/`) and no browser automation by default — the run
+  covers API-fed boards (Ashby, Lever, SimplifyJobs, Workday CXS) and
+  routes browser-only applications to the review queue. Headless runs
+  execute shell helpers: set your approval/sandbox policy in
+  `~/.codex/config.toml` (e.g. workspace-write) so `codex exec` can
+  run `scripts/` and write `data/` inside the repo. Runs `codex exec`.
+- **GitHub Copilot CLI** (degraded path) — install per
+  [docs.github.com/copilot](https://docs.github.com/copilot) (the
+  `copilot` command). Same inline-subagent and API-boards degraded
+  path as Codex. Runs `copilot -p … --allow-all-tools` — that flag
+  lets the headless run execute the repo's helpers without a TTY
+  approval; review what that means for your machine before
+  scheduling it.
+
+### Conformance results (scripts/run_conformance.py)
+
+The conformance suite pushes a golden job batch through
+canonicalize → fit gate → state writes against temp files (13
+deterministic checks, no LLM), and `--harness <name>` additionally
+drives the named CLI headlessly through one helper invocation and
+asserts the golden `job_key` lands in the transcript. A missing CLI
+reports `SKIP`, never a false pass. Re-run any time:
+
+```bash
+python3 scripts/run_conformance.py                 # deterministic core
+python3 scripts/run_conformance.py --harness all   # + installed CLIs (1 small LLM call each)
+```
+
+| Leg | Result | Date |
+| --- | --- | --- |
+| Deterministic core (13 checks) | PASS 13/13 | 2026-07-13 |
+| Harness: opencode | PASS | 2026-07-13 |
+| Harness: Claude Code | PASS | 2026-07-13 |
+| Harness: Codex CLI | PENDING — CLI not installed on the verification machine | — |
+| Harness: Copilot CLI | PENDING — CLI not installed on the verification machine | — |
+
 ## 4. Google Sheets sync (Phase 3, optional)
 
 The agent can append every successful application to a Google Sheet

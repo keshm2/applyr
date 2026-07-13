@@ -1,11 +1,13 @@
 # applyr — Job Application Agent — Core Rules
 
 ## Phase status (keep in sync with docs/PLAN.md's Phase Status Pointer)
-- **Last completed phase:** Phase 9 — migration-friendliness review
-  (2026-07-12, documentation-only: single-user assumption + file
-  table + seams list below, SETUP.md §3.7 two-users note). Phases
-  0–10 are DONE (phase 10's live autofill pass pending); phases 13
-  and 15 are partially done.
+- **Last completed phase:** Phase 16 — multi coding-agent support
+  (2026-07-13: codex/copilot adapters in run_job_agent.sh, 4-agent
+  installer detection, capability matrix + degraded paths below,
+  scripts/run_conformance.py with results in docs/SETUP.md §3.8;
+  codex/copilot live conformance runs pending on a machine with
+  those CLIs). Phases 0–10 and 16 are DONE (phase 10's live autofill
+  pass pending); phases 13 and 15 are partially done.
 - **Completed work items:** TUI manual/automatic modes (2026-07-12);
   project rename Ares → applyr + TUI accessibility pass (2026-07-12 —
   `applyr` is the command/package name, env vars are `APPLYR_*` with
@@ -32,10 +34,12 @@
   0.7.8-alpha.0, the unscoped `applyr` npm name is owned by an
   unrelated package; README banner + agent artwork in docs/assets/;
   npm publish pending `npm login`).
-- **Implement next:** phase 16 — multi coding-agent support (Codex +
-  GitHub Copilot, docs/PLAN.md §3.17), the first beta build item.
-  Phase 13 remains partial (npm publish pending `npm login`;
-  provider-setup and hosted storage deferred).
+- **Implement next:** phase 12 — multi-agent cost tiering
+  (docs/PLAN.md §3.13), the second beta build item. Phase 13 remains
+  partial (npm publish pending `npm login`; provider-setup and
+  hosted storage deferred); phase 15's full-run parity check remains
+  an operator action (the 2026-07-13 conformance legs are the first
+  live signal).
 - Whoever closes a phase or work item MUST update this block and the
   matching pointer at the top of docs/PLAN.md before stopping.
 
@@ -180,6 +184,43 @@ today:
   The sheet is user-facing: pass only the current visible tracker fields,
   never internal-only fields. See "Internship tracker (Google Sheets)
   sync" below.
+
+## Harness capability matrix (phase 16)
+
+applyr runs under four coding agents. Business logic is identical
+everywhere — the only harness-specific code is the adapter block in
+`scripts/run_job_agent.sh` (never add harness branches anywhere
+else). Capabilities differ; the degraded paths below are behavioral
+rules that keep the least-capable harness honest without weakening
+the helpers or prompts.
+
+| Capability | opencode | Claude Code | Codex CLI | Copilot CLI |
+| --- | --- | --- | --- | --- |
+| Subagent registry (`@resume-tailor`, `@discord-reporter`) | yes (`.opencode/agents/`) | yes (`.claude/agents/`) | no → inline fallback | no → inline fallback |
+| Browser automation (Playwright MCP) | yes (`opencode.jsonc`) | yes (`.mcp.json`) | no by default → API-boards path | no by default → API-boards path |
+| Shell / helper execution | yes | yes | yes (user's sandbox/approval config) | yes (`--allow-all-tools`) |
+| File read/write | yes | yes | yes | yes |
+| Project instructions | `AGENTS.md` (native) | `CLAUDE.md` → `AGENTS.md` | `AGENTS.md` (native) | prompt-passed; read `AGENTS.md` |
+
+**Degraded paths (mandatory when the capability is missing):**
+
+- **No subagent registry** — when the workflow delegates to
+  `@resume-tailor` or `@discord-reporter`, read
+  `agents/bodies/<name>.md` and perform that role inline, following
+  it exactly. Helper calls, routing rules, and state writes are
+  unchanged.
+- **No browser automation** — fetch and process **API-fed boards
+  only** (Ashby, Lever, SimplifyJobs, Workday CXS). Any job whose
+  application would require a browser is routed to `needs_review`
+  with reasoning "harness lacks browser automation: <title> at
+  <company>; user to apply manually" — the same
+  applied_jobs/review-queue/record-event/Discord flow as every
+  other needs_review outcome. **Never** silently skip such a job,
+  never attempt a browser apply without browser tools, and never
+  fork the business logic to compensate.
+- A degraded harness must not degrade the core: if a capability gap
+  cannot be routed to `needs_review`, stop and report rather than
+  improvising a weaker flow.
 
 ## Session start checklist
 1. Run `python3 scripts/job_state.py ensure-files` — create/validate the

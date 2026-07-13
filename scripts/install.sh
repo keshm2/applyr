@@ -80,37 +80,57 @@ for pair in "targets" "discord_config"; do
   fi
 done
 
-# --- 3. Harness detection -----------------------------------------------------
-HAVE_OPENCODE=0; HAVE_CLAUDE=0
-command -v opencode >/dev/null 2>&1 && HAVE_OPENCODE=1
-command -v claude >/dev/null 2>&1 && HAVE_CLAUDE=1
+# --- 3. Harness detection (Phase 15 + 16: all four major coding agents) -------
+# Detected agents are offered in full-capability-first order; Codex and
+# Copilot run the documented degraded path (no browser automation by
+# default) — see the "Harness capability matrix" in AGENTS.md.
+DETECTED=""
+label_for() {
+  case "$1" in
+    opencode) echo "opencode" ;;
+    claude)   echo "Claude Code" ;;
+    codex)    echo "Codex CLI          (API boards only unless browser tooling is configured)" ;;
+    copilot)  echo "GitHub Copilot CLI (API boards only unless browser tooling is configured)" ;;
+  esac
+}
+for AGENT in opencode claude codex copilot; do
+  command -v "$AGENT" >/dev/null 2>&1 && DETECTED="$DETECTED $AGENT"
+done
+DETECTED="${DETECTED# }"
 
-if [ "$HAVE_OPENCODE" -eq 0 ] && [ "$HAVE_CLAUDE" -eq 0 ]; then
-  warn "no supported coding agent found (opencode or claude)."
-  warn "install one, then re-run: https://opencode.ai or https://claude.com/claude-code"
+if [ -z "$DETECTED" ]; then
+  warn "no supported coding agent found (opencode, claude, codex, or copilot)."
+  warn "install one, then re-run: https://opencode.ai · https://claude.com/claude-code"
+  warn "  · https://developers.openai.com/codex/cli · https://docs.github.com/copilot"
 fi
 
 if [ -f "config/harness.json" ]; then
   say "config/harness.json exists — keeping it ($(jq -r '.harness // "?"' config/harness.json))."
 else
   HARNESS=""
-  if [ "$HAVE_OPENCODE" -eq 1 ] && [ "$HAVE_CLAUDE" -eq 1 ] && [ -t 0 ]; then
-    # Both agents installed and we can ask — let the user choose.
+  set -- $DETECTED
+  if [ "$#" -gt 1 ] && [ -t 0 ]; then
+    # More than one agent installed and we can ask — let the user choose.
     echo
     echo "Which coding agent should applyr use for runs?"
-    echo "  1) opencode      (detected)"
-    echo "  2) Claude Code   (detected)"
-    echo "  (Codex and GitHub Copilot support is planned — not available yet.)"
-    printf "Choose [1/2, default 1]: "
+    i=1
+    for AGENT in $DETECTED; do
+      echo "  $i) $(label_for "$AGENT")"
+      i=$((i + 1))
+    done
+    printf "Choose [1-%s, default 1]: " "$#"
     read -r CHOICE || CHOICE=""
     case "$CHOICE" in
-      2) HARNESS="claude" ;;
-      *) HARNESS="opencode" ;;
+      *[!0-9]*|"") CHOICE=1 ;;
     esac
-  elif [ "$HAVE_OPENCODE" -eq 1 ]; then
-    HARNESS="opencode"
-  elif [ "$HAVE_CLAUDE" -eq 1 ]; then
-    HARNESS="claude"
+    [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "$#" ] || CHOICE=1
+    i=1
+    for AGENT in $DETECTED; do
+      [ "$i" -eq "$CHOICE" ] && HARNESS="$AGENT"
+      i=$((i + 1))
+    done
+  elif [ "$#" -ge 1 ]; then
+    HARNESS="$1"
   fi
   if [ -n "$HARNESS" ]; then
     printf '{\n  "harness": "%s"\n}\n' "$HARNESS" > config/harness.json
@@ -185,7 +205,7 @@ echo
 # --- 5. Claude Code headless permissions (opt-in, asks first) ----------------
 # Headless runs need pre-approved tools; this file grants Claude Code broad
 # repo-local permissions, so it is only created with explicit consent.
-if [ "$HAVE_CLAUDE" -eq 1 ] && [ ! -f ".claude/settings.json" ]; then
+if command -v claude >/dev/null 2>&1 && [ ! -f ".claude/settings.json" ]; then
   echo
   echo "Claude Code headless runs need pre-approved permissions in .claude/settings.json:"
   echo '  Bash(*), Edit(*), Write(*), Read(*), mcp__playwright__* (repo-local)'

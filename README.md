@@ -23,11 +23,16 @@ applications** to stay polite to upstream boards and rate limits.
 
 ## You need a coding agent
 
-**applyr requires at least one of [Claude Code](https://claude.com/claude-code)
-or [opencode](https://opencode.ai) installed** — it drives whichever one
-you have to run the application workflow. The installer detects what is
-installed and asks when both are present. Without one of them, applyr
-cannot run.
+**applyr requires at least one supported coding agent installed** — it
+drives whichever one you have to run the application workflow. Without
+one, applyr cannot run. Recommended (full capability, including
+browser-automated applies): [Claude Code](https://claude.com/claude-code)
+or [opencode](https://opencode.ai). Also supported (phase 16):
+[Codex CLI](https://developers.openai.com/codex/cli) and
+[GitHub Copilot CLI](https://docs.github.com/copilot), which run the
+documented degraded path — API-fed boards only, with browser-only
+applications routed to the review queue. The installer detects what is
+installed and asks when more than one is present.
 
 <p align="center">
   <a href="https://opencode.ai"><img src="docs/assets/opencode.png" alt="opencode — the open source AI coding agent" width="360" /></a>
@@ -35,11 +40,12 @@ cannot run.
   <a href="https://claude.com/claude-code"><img src="docs/assets/claude-code.png" alt="Claude Code" width="200" /></a>
 </p>
 
-> **Status** — Phases 0–8, 10, and 15 (core) are implemented; the
-> Phase 13 TUI ships in this build (npm-distributed alpha). Phase 9 is
-> planned; Phase 16 (Codex, GitHub Copilot) is planned. No hosted
-> accounts and no provider-setup — runs locally. Workday is
-> review-only by design.
+> **Status** — Phases 0–10, 15 (core), and 16 (multi coding-agent:
+> Codex + Copilot adapters, capability matrix, conformance suite) are
+> implemented; the Phase 13 TUI ships as an npm-distributed alpha.
+> Codex/Copilot live conformance runs are pending on a machine with
+> those CLIs. No hosted accounts and no provider-setup — runs
+> locally. Workday is review-only by design.
 
 ## What applyr does today
 
@@ -79,7 +85,7 @@ the rules auditable and the state recoverable.
 | **Build** | `0.7.8a` (alpha) |
 | **Mode** | Single user, local-first, cron-friendly |
 | **Boards (today)** | Ashby, Lever (public JSON APIs); SimplifyJobs (public GitHub JSON feeds); Workday (public CXS JSON, review-only); LinkedIn, Indeed, Handshake, Greenhouse, Wellfound (Playwright) |
-| **Harnesses** | OpenCode, Claude Code (phase 15). Codex and GitHub Copilot planned (phase 16). |
+| **Harnesses** | OpenCode, Claude Code (full capability); Codex CLI, GitHub Copilot CLI (API-boards degraded path) — see `AGENTS.md` capability matrix |
 | **Runtime** | Harness orchestrator + stdlib-only Python helpers + bash driver |
 | **Notifications** | Discord webhooks routed by outcome (`success` / `needs_review` / `failed` / `summary`) |
 | **Tracker** | Google Sheet — one append-only row per successful application |
@@ -159,8 +165,11 @@ inside the unpacked directory.
 - `python3` (stdlib only — no `pip install` for the agent core)
 - `jq` (the config validator and the runner use it)
 - A coding agent: [OpenCode](https://opencode.ai) or
-  [Claude Code](https://claude.com/claude-code). The installer
-  refuses to start a run if neither is found.
+  [Claude Code](https://claude.com/claude-code) (recommended, full
+  capability), or [Codex CLI](https://developers.openai.com/codex/cli)
+  / [GitHub Copilot CLI](https://docs.github.com/copilot) (API-boards
+  degraded path). The installer refuses to start a run if none is
+  found.
 - `pip3 install -r requirements.txt` only if you enable the
   optional Google Sheets sync.
 - `node` ≥ 18 and `npm` only if you want the TUI.
@@ -687,7 +696,8 @@ are implemented** and described under
 | 9 — Migration-friendliness review | Planned | document per-user vs. project-owned seams; stays single-user |
 | 10 — Browser extension (hybrid mode) | Shipped (0.5.5a) | `extension/` (MV3 TypeScript) + `scripts/extension_bridge.py` — autofill from `safe_fields`, fit badge, helper-backed outcome recording; never auto-submits |
 | 13 — TUI overlay (partial) | Partial (0.5.5a) | `app/` (Ink + React) — manual/automatic modes, review triage, status/history. `npm` publication, provider-setup, and hosted storage deferred. |
-| 15 — Harness portability (partial) | Partial (0.5.5a) | OpenCode + Claude Code; `config/harness.json` and `$APPLYR_HARNESS` env var. Codex / GitHub Copilot support planned (phase 16). |
+| 15 — Harness portability (partial) | Partial (0.5.5a) | OpenCode + Claude Code; `config/harness.json` and `$APPLYR_HARNESS` env var. |
+| 16 — Multi coding-agent support | Shipped (post-0.7.8a) | Codex CLI + GitHub Copilot CLI adapters, capability matrix in `AGENTS.md`, conformance suite (`scripts/run_conformance.py`); Codex/Copilot live conformance runs pending on a machine with those CLIs. |
 | 16 — Codex / GitHub Copilot | Planned | noted in `scripts/install.sh`; not yet implemented |
 | Productization (hosted accounts, multi-agent) | Future | hosted accounts and further coding-agent support tracked in the planning document. **No implementation work authorized.** |
 
