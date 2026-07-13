@@ -6,27 +6,31 @@ import { ReviewScreen, REVIEW_HINTS } from "./ReviewScreen.js";
 import { HistoryScreen, HISTORY_HINTS } from "./HistoryScreen.js";
 import { RunScreen, RUN_HINTS, RUN_EDIT_HINTS } from "./RunScreen.js";
 import { SearchScreen, SEARCH_HINTS, SEARCH_EDIT_HINTS } from "./SearchScreen.js";
+import { SettingsScreen, SETTINGS_HINTS, SETTINGS_SECTION_HINTS } from "./SettingsScreen.js";
 import { HelpOverlay } from "./HelpOverlay.js";
 import { WelcomeScreen, type WelcomeOption } from "./WelcomeScreen.js";
 import { KeyHints } from "./KeyHints.js";
 import { SidePanel } from "./SidePanel.js";
-import { loadState, isResolved, lastRunLine, latestSessionLog, readHeartbeat, userFirstName } from "../state.js";
+import { loadState, isResolved, lastRunLine, latestSessionLog, readHeartbeat } from "../state.js";
+import { displayName } from "../settings.js";
 import type { ApplyrState } from "../state.js";
 import { theme, MIN_COLUMNS, MIN_ROWS, SELECT_MARKER, SIDE_PANEL_WIDTH } from "../theme.js";
 
-export type Tab = "status" | "jobs" | "review" | "history";
+export type Tab = "status" | "jobs" | "review" | "history" | "settings";
 export type Mode = "manual" | "automatic";
-const TABS: Tab[] = ["status", "jobs", "review", "history"];
+const TABS: Tab[] = ["status", "jobs", "review", "history", "settings"];
 const TAB_LABEL: Record<Tab, string> = {
   status: "Status",
   jobs: "Jobs",
   review: "Review",
   history: "History",
+  settings: "Config",
 };
 const TAB_HINTS: Omit<Record<Tab, string>, "jobs"> = {
   status: "",
   review: REVIEW_HINTS,
   history: HISTORY_HINTS,
+  settings: SETTINGS_HINTS,
 };
 
 const WELCOME_OPTIONS: Array<WelcomeOption & { tab: Tab; mode?: Mode }> = [
@@ -57,12 +61,18 @@ const WELCOME_OPTIONS: Array<WelcomeOption & { tab: Tab; mode?: Mode }> = [
     description: "Browse recorded applications and outcomes in one place.",
     tab: "history",
   },
+  {
+    label: "Settings",
+    description: "See what everything is currently set to, then change it: personal info (and the name applyr calls you), Discord webhooks, and environment overrides like the log directory.",
+    tab: "settings",
+  },
 ];
 
 function welcomeIndexFor(tab: Tab, mode: Mode): number {
   if (tab === "jobs") return mode === "automatic" ? 1 : 0;
   if (tab === "review") return 2;
   if (tab === "history") return 4;
+  if (tab === "settings") return 5;
   return 3;
 }
 
@@ -259,6 +269,8 @@ export function App({ root, initialTab = "status" }: { root: string; initialTab?
   if (tab === "jobs") {
     if (childInputActive) tabHints = mode === "manual" ? SEARCH_EDIT_HINTS : RUN_EDIT_HINTS;
     else tabHints = mode === "manual" ? SEARCH_HINTS : RUN_HINTS;
+  } else if (tab === "settings" && childInputActive) {
+    tabHints = SETTINGS_SECTION_HINTS;
   } else {
     tabHints = TAB_HINTS[tab];
   }
@@ -381,12 +393,20 @@ export function App({ root, initialTab = "status" }: { root: string; initialTab?
                     contentRows={contentRows}
                     columns={contentCols}
                   />
-                ) : (
+                ) : tab === "history" ? (
                   <HistoryScreen
                     state={state}
                     active={tab === "history" && !helpOpen}
                     contentRows={contentRows}
                     columns={contentCols}
+                  />
+                ) : (
+                  <SettingsScreen
+                    root={root}
+                    active={tab === "settings" && !helpOpen}
+                    onInputActiveChange={setChildInputActive}
+                    onSettingsChange={refresh}
+                    contentRows={contentRows}
                   />
                 )}
               </Box>
@@ -406,7 +426,7 @@ export function App({ root, initialTab = "status" }: { root: string; initialTab?
             borderColor={theme.rule}
           >
             <SidePanel
-              firstName={userFirstName(root)}
+              firstName={displayName(root)}
               applied={counts.applied}
               pending={unresolved}
               failed={counts.failed}

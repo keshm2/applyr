@@ -8,12 +8,32 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-mkdir -p data logs
+# --- Persisted env overrides (config/env.json, written by the TUI's
+# Settings screen). Only APPLYR_*/ARES_* keys are honored, and a variable
+# already set in the real environment always wins.
+if [ -f "config/env.json" ] && command -v jq >/dev/null 2>&1; then
+  while IFS= read -r pair; do
+    k="${pair%%=*}"; v="${pair#*=}"
+    [ -n "$k" ] || continue
+    if [ -z "$(printenv "$k" 2>/dev/null || true)" ]; then
+      export "$k=$v"
+    fi
+  done < <(jq -r 'to_entries[]
+      | select(.key | test("^(APPLYR|ARES)_[A-Z_]+$"))
+      | select(.value != null and .value != "")
+      | "\(.key)=\(.value)"' config/env.json 2>/dev/null || true)
+fi
+
+# Log directory — configurable via APPLYR_LOG_DIR (Settings screen).
+# The agent's fetch-scratch (logs/tmp) intentionally stays in the repo:
+# the prompts reference that literal path.
+LOGS_DIR="${APPLYR_LOG_DIR:-logs}"
+mkdir -p data "$LOGS_DIR" logs
 # Per-run fetch scratch space (AGENTS.md fetch-efficiency rules): raw
 # board dumps land here instead of the LLM transcript. Cleared per run.
 rm -rf logs/tmp && mkdir -p logs/tmp
 
-RUN_LOG="logs/run_job_agent.log"
+RUN_LOG="$LOGS_DIR/run_job_agent.log"
 
 # --- Auto-update (fail-open; set APPLYR_AUTO_UPDATE=0 to disable) ------------
 # Every scheduled tick checks upstream main and self-updates before doing
@@ -41,7 +61,7 @@ fi
 # LOCK_MAX_AGE_MIN is treated as a hung run — the holder is terminated
 # and the lock reclaimed, so a wedged run never permanently blocks the
 # 30-minute schedule (and no second agent ever runs concurrently).
-LOCK_DIR="logs/.run_job_agent.lock"
+LOCK_DIR="$LOGS_DIR/.run_job_agent.lock"
 LOCK_PID="$LOCK_DIR/pid"
 # APPLYR_* is the documented env-var prefix; the legacy ARES_* names are
 # honored as fallbacks so pre-rename schedules keep working.
@@ -163,7 +183,7 @@ BEFORE_SKIPPED="$(count_skipped_unfit)"
 
 # --- Run the agent ---------------------------------------------------------
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-SESSION_LOG="logs/session_${TIMESTAMP}.log"
+SESSION_LOG="$LOGS_DIR/session_${TIMESTAMP}.log"
 echo "run_job_agent: start $(date -u +%Y-%m-%dT%H:%M:%SZ) harness=$HARNESS" >> "$SESSION_LOG"
 
 # --- Per-session application cap (Phase 13 TUI modes) ------------------------
@@ -262,7 +282,7 @@ python3 scripts/write_heartbeat.py --exit-code "$RUN_RC" \
 
 # --- Session-log retention (keep the newest N; no external shipper) ----------
 KEEP_SESSIONS="${APPLYR_KEEP_SESSION_LOGS:-${ARES_KEEP_SESSION_LOGS:-30}}"
-ls -1t logs/session_*.log 2>/dev/null | tail -n +"$((KEEP_SESSIONS + 1))" | while read -r old; do
+ls -1t "$LOGS_DIR"/session_*.log 2>/dev/null | tail -n +"$((KEEP_SESSIONS + 1))" | while read -r old; do
   rm -f "$old"
 done
 

@@ -7,6 +7,24 @@ but trimmed to fit a small in-repo doc.
 > Per-`docs/RELEASE.md` is the canonical, deep-dive release
 > document for each tagged build. This file is the index.
 
+## [Unreleased] — on `main`
+
+### Added
+
+- **TUI Settings tab (Config, tab 5).** Three `> [x]` sections that
+  always show current values before editing, with a per-field
+  explanation: Personal info (safe_fields plus the new
+  **preferred name** the sidebar greets you by, falling back to
+  first name), Discord webhooks (enabled toggle + per-route URLs),
+  and Environment — persisted `APPLYR_*` overrides in the new
+  gitignored `config/env.json`, exported by every run (real env vars
+  win; only `APPLYR_*`/`ARES_*` keys are honored). New
+  `APPLYR_LOG_DIR` moves run/session logs and the heartbeat
+  (runner, `write_heartbeat.py`, and the TUI's log readers all honor
+  it; agent fetch-scratch stays in `logs/tmp`).
+- **README:** Codex CLI and GitHub Copilot CLI artwork added to the
+  supported-agents row.
+
 ## [0.7.9a] — 2026-07-13
 
 npm package: `@keshm2/applyr` version `0.7.9-alpha.0` (alpha tag).

@@ -90,10 +90,10 @@ export const BANNER_GRADIENT = [
 export const BANNER_WIDTH = BANNER_ROWS[0].length;
 
 /** Below this size the app shows a "terminal too small" notice. The tab
- *  row is the binding constraint: with the Review "(n)" badge it needs
- *  ~43 cols, and wrapping it corrupts the pinned frame. The banner
+ *  row is the binding constraint: five tabs plus the Review "(n)" badge need
+ *  ~53 cols, and wrapping it corrupts the pinned frame. The banner
  *  collapses earlier. */
-export const MIN_COLUMNS = 44;
+export const MIN_COLUMNS = 54;
 export const MIN_ROWS = 12;
 
 /** Build/release marker shown in the side panel footer. */

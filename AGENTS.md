@@ -43,7 +43,12 @@
   install/updates/uninstall/usage/safety, phase content moved to
   docs; first auto-update rollout; Discord made optional — install
   opt-in with one-channel vs separate-channels choice, disabled
-  config = local-only outcomes, validator/reporter skip cleanly).
+  config = local-only outcomes, validator/reporter skip cleanly);
+  TUI Settings tab (2026-07-13 — Config tab 5: personal info incl.
+  preferred_name greeting, Discord toggle/routes, persisted APPLYR_*
+  overrides in gitignored config/env.json exported by the runner
+  with an APPLYR_/ARES_ prefix filter; APPLYR_LOG_DIR honored by
+  runner/heartbeat/TUI).
 - **Implement next:** phase 12 — multi-agent cost tiering
   (docs/PLAN.md §3.13), the second beta build item. Phase 13 remains
   partial (npm publish pending `npm login`; provider-setup and

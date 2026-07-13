@@ -442,6 +442,26 @@ python3 scripts/run_conformance.py --harness all   # + installed CLIs (1 small L
 | Harness: Codex CLI | PENDING — CLI not installed on the verification machine | — |
 | Harness: Copilot CLI | PENDING — CLI not installed on the verification machine | — |
 
+## 3.9 Settings screen (TUI Config tab)
+
+`applyr` → tab 5 (**Config**) shows every setting's current value
+before you change it, in three sections:
+
+- **Personal info** — the `safe_fields` in `config/targets.json`,
+  plus **Preferred name**: how the TUI greets you in the sidebar
+  (falls back to your first name when empty).
+- **Discord webhooks** — the enabled switch (enter toggles) and the
+  four per-outcome webhook URLs.
+- **Environment** — persisted `APPLYR_*` overrides saved to
+  `config/env.json` (gitignored) and exported by every run; a
+  variable set in your real shell environment always wins, and
+  clearing a value returns it to the default. Includes
+  `APPLYR_LOG_DIR` (where run/session logs and the heartbeat live —
+  the agent's fetch-scratch stays in the project's `logs/tmp`),
+  `APPLYR_SESSION_CAP`, `APPLYR_KEEP_SESSION_LOGS`,
+  `APPLYR_LOCK_MAX_AGE_MIN`, `APPLYR_AUTO_UPDATE`, and
+  `APPLYR_HARNESS`.
+
 ## 4. Google Sheets sync (Phase 3, optional)
 
 The agent can append every successful application to a Google Sheet

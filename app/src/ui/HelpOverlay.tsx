@@ -28,11 +28,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  *  the sectioned reference (an overflowing frame corrupts Ink's repaint). */
 function CompactHelp() {
   const lines: Array<[string, string]> = [
-    ["Everywhere", "1-4/←→/tab screens · esc/w menu · m mode · R reload · q quit"],
+    ["Everywhere", "1-5/←→/tab screens · esc/w menu · m mode · R reload · q quit"],
     ["Jobs MANUAL", "/ query · ↑↓ select · enter/o open · f fit · s save"],
     ["Jobs AUTO", "e cap (25=MAX) · p prompt · s start"],
     ["Review", "↑↓ · enter/o open · a applied · d dismiss · x resolved"],
     ["History", "↑↓ · enter/o open"],
+    ["Config", "↑↓ · enter open/edit/toggle · esc back"],
   ];
   return (
     <Box flexDirection="column">
@@ -62,7 +63,7 @@ export function HelpOverlay({ contentRows = 40 }: { contentRows?: number }) {
       </Text>
       <Box marginTop={1} flexDirection="column">
         <Section title="Everywhere">
-          <Key k="1-4 / tab / ←→" desc="switch screen (Status · Jobs · Review · History)" />
+          <Key k="1-5 / tab / ←→" desc="switch screen (Status · Jobs · Review · History · Config)" />
           <Key k="m" desc="toggle MANUAL / AUTO mode (changes the Jobs screen)" />
           <Key k="R" desc="reload state from disk" />
           <Key k="esc / w" desc="back to the welcome menu (esc never quits; locked mid-run)" />
@@ -89,6 +90,10 @@ export function HelpOverlay({ contentRows = 40 }: { contentRows?: number }) {
         </Section>
         <Section title="History">
           <Key k="enter / o" desc="open the posting" />
+        </Section>
+        <Section title="Config (settings)">
+          <Key k="enter" desc="open a section / edit the selected field (current values always shown)" />
+          <Key k="esc" desc="back out of a section, or cancel an edit" />
         </Section>
       </Box>
     </Box>

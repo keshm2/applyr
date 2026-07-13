@@ -35,9 +35,13 @@ routed to the review queue. The installer detects what is installed
 and asks when more than one is present.
 
 <p align="center">
-  <a href="https://opencode.ai"><img src="docs/assets/opencode.png" alt="opencode — the open source AI coding agent" width="360" /></a>
+  <a href="https://opencode.ai"><img src="docs/assets/opencode.png" alt="opencode — the open source AI coding agent" width="300" /></a>
   &nbsp;&nbsp;
-  <a href="https://claude.com/claude-code"><img src="docs/assets/claude-code.png" alt="Claude Code" width="200" /></a>
+  <a href="https://claude.com/claude-code"><img src="docs/assets/claude-code.png" alt="Claude Code" width="170" /></a>
+  &nbsp;&nbsp;
+  <a href="https://developers.openai.com/codex/cli"><img src="docs/assets/codex.png" alt="Codex CLI" width="300" /></a>
+  &nbsp;&nbsp;
+  <a href="https://docs.github.com/copilot"><img src="docs/assets/github-copilot.png" alt="GitHub Copilot CLI" width="300" /></a>
 </p>
 
 ## Install — one command
@@ -133,7 +137,12 @@ on demand, and saves postings to review; **Jobs → AUTO** sets a
 per-run cap (1–25, tier-colored, 25 = rainbow MAX warning) plus an
 optional extra instruction, then streams the run log. Review triage
 (`a` applied / `d` dismiss) and History write through the same
-helpers as the agent. The TUI never edits state JSON directly.
+helpers as the agent. **Config (tab 5)** shows every setting's
+current value before you change it: personal info (including the
+preferred name applyr greets you by), Discord webhooks, and persisted
+environment overrides (log directory, session cap, auto-update,
+harness — saved to `config/env.json`; a real env var always wins).
+The TUI never edits state JSON directly.
 
 Configuration lives in `config/*.json` (copied from the
 `*.example.json` templates by the installer; edit via `applyr setup`).

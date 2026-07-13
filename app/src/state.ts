@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { logDir } from "./settings.js";
 
 export interface AppliedJob {
   job_id: string;
@@ -132,7 +133,7 @@ export interface Heartbeat {
 export function readHeartbeat(root: string): Heartbeat | undefined {
   try {
     return JSON.parse(
-      fs.readFileSync(path.join(root, "logs", "heartbeat.json"), "utf8"),
+      fs.readFileSync(path.join(logDir(root), "heartbeat.json"), "utf8"),
     ) as Heartbeat;
   } catch {
     return undefined;
@@ -141,7 +142,7 @@ export function readHeartbeat(root: string): Heartbeat | undefined {
 
 export function lastRunLine(root: string): string {
   try {
-    const log = fs.readFileSync(path.join(root, "logs", "run_job_agent.log"), "utf8");
+    const log = fs.readFileSync(path.join(logDir(root), "run_job_agent.log"), "utf8");
     const lines = log.trim().split("\n");
     return lines[lines.length - 1] ?? "";
   } catch {
@@ -151,7 +152,7 @@ export function lastRunLine(root: string): string {
 
 export function latestSessionLog(root: string): string | undefined {
   try {
-    const dir = path.join(root, "logs");
+    const dir = logDir(root);
     const sessions = fs
       .readdirSync(dir)
       .filter((f) => f.startsWith("session_") && f.endsWith(".log"))

@@ -48,6 +48,7 @@ system_architecture.md
 
 # Phase 15: per-machine harness selection
 /config/harness.json
+/config/env.json
 /.claude/settings.json
 
 # Phase 10: browser extension — build artifacts + per-install bridge token
