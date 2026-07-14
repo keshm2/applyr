@@ -125,7 +125,7 @@ today:
 - Max 25 applications per session (rate limit protection). The TUI's
   automatic mode may lower this per run via APPLYR_SESSION_CAP (1–25;
   the legacy ARES_SESSION_CAP name is honored as a fallback);
-  the cap can never exceed 25. scripts/run_job_agent.sh reads
+  the cap can never exceed 25. scripts/runtime/run_job_agent.sh reads
   APPLYR_SESSION_CAP (default 25), clamps values above 25 down to 25,
   and falls back to 25 on invalid or below-1 input, then injects the
   effective cap into the run prompt so the orchestrator is explicitly
@@ -150,7 +150,7 @@ today:
   outcome.
 - ALWAYS canonicalize every raw job that survives the deterministic
   role/level prefilter into one internal record via the canonical helper
-  (scripts/job_state.py) before any dedup or fit decision. A
+  (scripts/state/job_state.py) before any dedup or fit decision. A
   deterministic raw-title prefilter (the role/level keyword rule plus
   the fetch-efficiency shortlist bound below) MUST run before
   canonicalization to bound work — prefiltered-out jobs are never
@@ -172,7 +172,7 @@ today:
   canonical helper — never hand-write the registry.
 - ALWAYS run the deterministic JD fit gate on every canonical job after
   role filtering and before tailoring:
-  `python3 scripts/evaluate_job_fit.py '<canonical-job-json>'`
+  `python3 scripts/jobs/evaluate_job_fit.py '<canonical-job-json>'`
   The helper returns fit_status of skipped_unfit, needs_review, or
   candidate (plus fit_score, reasoning, fit_reasons,
   matched_role_keyword, matched_level_keyword, matched_level_source,
@@ -196,7 +196,7 @@ today:
 - ALWAYS record an internal event via record-event for every applied,
   needs_review, or failed outcome.
 - ONLY successful applications (status "applied") are synced to the
-  Google Sheet internship tracker via scripts/sync_internship_tracker.py
+  Google Sheet internship tracker via scripts/jobs/sync_internship_tracker.py
   — exactly one row per successful application, and only after the
   applied_jobs.json entry and internal event are recorded. needs_review,
   failed, and skipped_unfit outcomes must never be written to the sheet.
@@ -208,7 +208,7 @@ today:
 
 applyr runs under four coding agents. Business logic is identical
 everywhere — the only harness-specific code is the adapter block in
-`scripts/run_job_agent.sh` (never add harness branches anywhere
+`scripts/runtime/run_job_agent.sh` (never add harness branches anywhere
 else). Capabilities differ; the degraded paths below are behavioral
 rules that keep the least-capable harness honest without weakening
 the helpers or prompts.
@@ -242,7 +242,7 @@ the helpers or prompts.
   improvising a weaker flow.
 
 ## Session start checklist
-1. Run `python3 scripts/job_state.py ensure-files` — create/validate the
+1. Run `python3 scripts/state/job_state.py ensure-files` — create/validate the
    canonical registry (data/job_registry.json) and local event log.
 2. Read data/applied_jobs.json — build your dedup set.
 3. Read data/job_registry.json — build your canonical dedup set.
@@ -265,12 +265,12 @@ the helpers or prompts.
   normally. Note this state is normally short-lived: the config
   validator auto-seeds placeholder-only slug arrays from the
   project-owned vetted lists (config/ashby_vetted_slugs.json,
-  config/lever_vetted_slugs.json) via scripts/seed_vetted_slugs.py —
+  config/lever_vetted_slugs.json) via scripts/validate/seed_vetted_slugs.py —
   it never overwrites an array containing any real slug. Never edit
   the vetted lists at run time; additions are reviewed code changes.
 - SimplifyJobs: use the deterministic fetch helper — never scrape GitHub
   with Playwright:
-  `python3 scripts/fetch_simplify_listings.py`
+  `python3 scripts/jobs/fetch_simplify_listings.py`
   The helper reads config/targets.json "simplify_feeds" (known feeds:
   "summer_internships", "new_grad"), fetches the project-owned
   SimplifyJobs listings JSON from raw.githubusercontent.com, filters to
@@ -298,7 +298,7 @@ the helpers or prompts.
   fetch helper — it calls the tenant's public, auth-free CXS JSON
   endpoints; only fall back to Playwright on a posting when the helper
   fails for it:
-  `python3 scripts/fetch_workday_listings.py --search "intern" --limit 200`
+  `python3 scripts/jobs/fetch_workday_listings.py --search "intern" --limit 200`
   One raw-job JSON object per line (source "workday"), ready for
   canonicalize.
   - Missing/empty/placeholder "workday_tenants" → helper warns, prints
@@ -306,7 +306,7 @@ the helpers or prompts.
     (every tenant failed) → one warning, skip, continue.
   - Listings carry NO JD text. After role filtering and BEFORE the fit
     gate, fetch the JD per surviving candidate with
-    `python3 scripts/fetch_workday_listings.py --jd-url '<posting-url>'`
+    `python3 scripts/jobs/fetch_workday_listings.py --jd-url '<posting-url>'`
     and re-canonicalize/upsert with the fetched jd_text. Never fit-gate
     a Workday job with empty jd_text.
   - **No auto-apply path exists for Workday.** A Workday job whose fit
@@ -344,7 +344,7 @@ the helpers or prompts.
 ## Deterministic JD fit gate
 - After role filtering and before tailoring, run the deterministic fit
   helper on every canonical job:
-  `python3 scripts/evaluate_job_fit.py '<canonical-job-json>'`
+  `python3 scripts/jobs/evaluate_job_fit.py '<canonical-job-json>'`
   Pass the canonical job JSON (the same object upserted into the
   registry). The helper returns a JSON object with at least fit_status,
   fit_score, reasoning, fit_reasons, matched_role_keyword,
@@ -406,29 +406,29 @@ the helpers or prompts.
   scope. This field is required by the File write discipline schema.
 
 ## Canonical registry and event log
-- The canonical helper (scripts/job_state.py) is the single source of truth
+- The canonical helper (scripts/state/job_state.py) is the single source of truth
   for canonical job records and internal events. Never hand-write
   data/job_registry.json or the local event log — always go through the
   helper.
 - Canonicalize every scraped raw job into one internal record before any
   dedup or filtering decision:
-  `python3 scripts/job_state.py canonicalize '<raw-job-json>'`
+  `python3 scripts/state/job_state.py canonicalize '<raw-job-json>'`
   Pass the raw job (company, title, url, source, jd_text, location, etc.)
   as a single JSON object string. The helper returns a canonical job JSON
   with a stable job_key (the canonical identity) and a job_id. job_id is
   "{source}-{external_job_id}" when an external id is available, otherwise
   the job_key.
 - Upsert each canonical record into the registry:
-  `python3 scripts/job_state.py upsert-job '<canonical-job-json>'`
+  `python3 scripts/state/job_state.py upsert-job '<canonical-job-json>'`
   The helper merges by job_key — existing records are updated, new records
   are inserted. Never append duplicates manually.
 - Before any application attempt, re-check eligibility:
-  `python3 scripts/job_state.py can-apply '<canonical-job-json>'`
+  `python3 scripts/state/job_state.py can-apply '<canonical-job-json>'`
   This is the dedupe recheck against the registry and applied history. If
   the helper refuses (returns non-zero or prints "no"), skip the job and
   record a skipped_unfit event. Do not attempt the application.
 - Record internal events for every outcome:
-  `python3 scripts/job_state.py record-event '<event-json>'`
+  `python3 scripts/state/job_state.py record-event '<event-json>'`
   Status values and when to use them:
     - skipped_unfit — a hard reject during filtering (3+ years, out of US
       scope, etc.), a skipped_unfit from the deterministic fit gate
@@ -474,21 +474,21 @@ the helpers or prompts.
   hand-write jq one-liners to mutate state files directly. The helper
   handles atomic write, array append, and dedup guard.
   - Append to applied_jobs.json:
-    `bash scripts/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
+    `bash scripts/state/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
   - Append to review_queue.json:
-    `bash scripts/append_state_entry.sh data/review_queue.json '<entry-json>'`
+    `bash scripts/state/append_state_entry.sh data/review_queue.json '<entry-json>'`
   - Pass the entry as a single JSON object string. Do not construct tmp
     files or mv commands yourself.
 - Canonical registry and event log writes go through the canonical helper
-  (scripts/job_state.py), not append_state_entry.sh:
-  `python3 scripts/job_state.py upsert-job '<canonical-job-json>'`
-  `python3 scripts/job_state.py record-event '<event-json>'`
+  (scripts/state/job_state.py), not append_state_entry.sh:
+  `python3 scripts/state/job_state.py upsert-job '<canonical-job-json>'`
+  `python3 scripts/state/job_state.py record-event '<event-json>'`
   See "Canonical registry and event log" above for the full flow.
 
 ## Scheduler (phase 8)
 - The production cadence is a launchd user agent (macOS) running
-  scripts/run_job_agent.sh every 30 minutes, 24/7 — managed by
-  scripts/scheduler.sh (install|uninstall|status|plist); Linux
+  scripts/runtime/run_job_agent.sh every 30 minutes, 24/7 — managed by
+  scripts/runtime/scheduler.sh (install|uninstall|status|plist); Linux
   equivalent documented in docs/SETUP.md 3.5. The runner owns overlap
   protection (skip-on-overlap, dead-lock reclaim, 60-min hung-run
   threshold), writes the machine-parseable
@@ -517,7 +517,7 @@ the helpers or prompts.
   field the profile cannot answer is highlighted for the user, never
   invented. The bridge serves only the specific keys a page's form
   mapped — never the whole safe_fields map.
-- All extension reads/writes flow through scripts/extension_bridge.py
+- All extension reads/writes flow through scripts/runtime/extension_bridge.py
   (localhost-only, per-install bearer token in the gitignored
   config/extension_bridge.json). The bridge itself only shells out to
   the standard helpers (job_state.py, evaluate_job_fit.py,
@@ -551,7 +551,7 @@ the helpers or prompts.
   role_type) to the sheet.
 - Invoke the helper with a single JSON payload describing one successful
   application:
-  `python3 scripts/sync_internship_tracker.py '<row-json>'`
+  `python3 scripts/jobs/sync_internship_tracker.py '<row-json>'`
   The payload carries the visible tracker row fields (JSON keys match
   the helper's accepted payload fields):
     - company (required) — the applied job's company.

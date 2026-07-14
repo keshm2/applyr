@@ -112,7 +112,7 @@ export function RunScreen({
     setElapsed(0);
     setPhase("running");
     const extraPrompt = promptInput.trim();
-    const runner = py(["scripts/run_job_agent.py"]);
+    const runner = py(["scripts/runtime/run_job_agent.py"]);
     const proc = spawn(runner.cmd, runner.args, {
       cwd: root,
       // APPLYR_SESSION_CAP is the documented name; the legacy ARES_* name
@@ -363,7 +363,7 @@ export function RunScreen({
                 {sessionCap === null ? (
                   <>Press <Text bold color={theme.accent}>e</Text>, type a count, then enter. Optional: <Text bold color={theme.accent}>p</Text> for an extra prompt.</>
                 ) : (
-                  <>Press <Text bold color={theme.accent}>s</Text> to start via{" "}<Text dimColor>scripts/run_job_agent.py</Text></>
+                  <>Press <Text bold color={theme.accent}>s</Text> to start via{" "}<Text dimColor>scripts/runtime/run_job_agent.py</Text></>
                 )}
               </Text>
               <Text dimColor>scrapes configured boards · fit-gates · tailors · applies ({sessionCap ?? "–"}/25 cap)</Text>

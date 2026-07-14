@@ -12,8 +12,8 @@ import { py } from "./platform.js";
  */
 export async function runAgent(root: string): Promise<number> {
   const before = latestSessionLog(root);
-  console.log("Starting a run via scripts/run_job_agent.py …");
-  const { cmd, args } = py(["scripts/run_job_agent.py"]);
+  console.log("Starting a run via scripts/runtime/run_job_agent.py …");
+  const { cmd, args } = py(["scripts/runtime/run_job_agent.py"]);
   const child = spawn(cmd, args, {
     cwd: root,
     stdio: ["ignore", "inherit", "inherit"],

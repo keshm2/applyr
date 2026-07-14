@@ -1,8 +1,8 @@
 #!/bin/bash
 # uninstall.sh — uninstaller (Unix shim).
 #
-# Logic now lives in scripts/uninstall.py so it runs natively on Windows as
-# well as macOS/Linux. This shim keeps `bash scripts/uninstall.sh [flags]`
+# Logic now lives in scripts/install/uninstall.py so it runs natively on Windows as
+# well as macOS/Linux. This shim keeps `bash scripts/install/uninstall.sh [flags]`
 # working unchanged, forwarding --yes / --keep-data.
 set -euo pipefail
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 # scheduler.sh — schedule management (Unix shim).
 #
-# Logic now lives in scripts/scheduler.py (launchd on macOS, schtasks on
-# Windows, systemd note on Linux). This shim keeps `bash scripts/scheduler.sh
+# Logic now lives in scripts/runtime/scheduler.py (launchd on macOS, schtasks on
+# Windows, systemd note on Linux). This shim keeps `bash scripts/runtime/scheduler.sh
 # install|uninstall|status|plist` working unchanged.
 set -euo pipefail
 

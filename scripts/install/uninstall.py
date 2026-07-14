@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(SCRIPT_DIR)
+ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 IS_WINDOWS = os.name == "nt"
 
 
@@ -105,7 +105,7 @@ def main(argv) -> int:
     os.chdir(ROOT)
 
     # 1. Schedule.
-    scheduler = os.path.join("scripts", "scheduler.py")
+    scheduler = os.path.join("scripts", "runtime", "scheduler.py")
     if os.path.isfile(scheduler):
         rc = subprocess.run([sys.executable, scheduler, "uninstall"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode

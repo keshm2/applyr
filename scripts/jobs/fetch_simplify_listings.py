@@ -4,7 +4,7 @@
 Fetches the project-owned SimplifyJobs listing feeds (raw GitHub JSON —
 no auth, no scraping), filters to active + visible postings, and emits
 one raw-job JSON object per line on stdout, shaped for
-`scripts/job_state.py canonicalize`.
+`scripts/state/job_state.py canonicalize`.
 
 Feeds are configured in config/targets.json:
 
@@ -30,9 +30,9 @@ Exit codes:
   3  every configured feed failed to fetch (partial failure exits 0)
 
 Usage:
-  python3 scripts/fetch_simplify_listings.py
-  python3 scripts/fetch_simplify_listings.py --targets config/targets.json
-  python3 scripts/fetch_simplify_listings.py --feeds summer_internships --limit 50
+  python3 scripts/jobs/fetch_simplify_listings.py
+  python3 scripts/jobs/fetch_simplify_listings.py --targets config/targets.json
+  python3 scripts/jobs/fetch_simplify_listings.py --feeds summer_internships --limit 50
 """
 
 from __future__ import annotations

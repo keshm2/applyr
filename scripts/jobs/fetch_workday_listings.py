@@ -4,7 +4,7 @@
 Fetches job postings from configured Workday tenants via the public,
 auth-free CXS JSON endpoints (no scraping, no Playwright needed for the
 common case) and emits one raw-job JSON object per line on stdout,
-shaped for `scripts/job_state.py canonicalize`.
+shaped for `scripts/state/job_state.py canonicalize`.
 
 Tenants are configured in config/targets.json as
 "<host>/<site>" strings — the tenant is the unit of configuration:
@@ -18,7 +18,7 @@ is skipped — a warning goes to stderr, nothing on stdout, exit 0.
 The list feed carries NO JD body. After role filtering and before the
 fit gate, the orchestrator fetches the JD per surviving candidate:
 
-  python3 scripts/fetch_workday_listings.py --jd-url '<posting-url>'
+  python3 scripts/jobs/fetch_workday_listings.py --jd-url '<posting-url>'
 
 which prints one JSON object with jd_text (HTML stripped), title,
 location, and url. Phase 7 is review-only: nothing in this helper (or
@@ -36,9 +36,9 @@ Exit codes:
   3  every configured tenant failed to fetch (partial failure exits 0)
 
 Usage:
-  python3 scripts/fetch_workday_listings.py
-  python3 scripts/fetch_workday_listings.py --search intern --limit 100
-  python3 scripts/fetch_workday_listings.py --jd-url 'https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/.../X_JR123'
+  python3 scripts/jobs/fetch_workday_listings.py
+  python3 scripts/jobs/fetch_workday_listings.py --search intern --limit 100
+  python3 scripts/jobs/fetch_workday_listings.py --jd-url 'https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/.../X_JR123'
 """
 
 from __future__ import annotations

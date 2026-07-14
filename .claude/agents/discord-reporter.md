@@ -7,7 +7,7 @@ description: >
   config/discord_config.json. skipped_unfit is never routed here.
 model: inherit
 ---
-<!-- GENERATED from agents/bodies/discord-reporter.md + agents/frontmatter/claude/discord-reporter.yaml — edit those sources and run scripts/generate_agent_definitions.py -->
+<!-- GENERATED from agents/bodies/discord-reporter.md + agents/frontmatter/claude/discord-reporter.yaml — edit those sources and run scripts/validate/generate_agent_definitions.py -->
 
 You send Discord webhook messages. Read config/discord_config.json first:
 **Discord reporting is optional.** If the file is missing, or it has

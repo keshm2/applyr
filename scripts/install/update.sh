@@ -1,9 +1,9 @@
 #!/bin/bash
 # update.sh — self-updater (Unix shim).
 #
-# The updater logic now lives in scripts/update.py so it runs natively on
+# The updater logic now lives in scripts/install/update.py so it runs natively on
 # Windows as well as macOS/Linux with no curl/tar dependency. This shim keeps
-# callers that invoke `bash scripts/update.sh [--auto]` working unchanged.
+# callers that invoke `bash scripts/install/update.sh [--auto]` working unchanged.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

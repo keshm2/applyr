@@ -31,8 +31,8 @@ Exit codes:
   1  usage/config error (unreadable targets file, invalid JSON)
 
 Usage:
-  python3 scripts/seed_vetted_slugs.py
-  python3 scripts/seed_vetted_slugs.py --targets config/targets.json
+  python3 scripts/validate/seed_vetted_slugs.py
+  python3 scripts/validate/seed_vetted_slugs.py --targets config/targets.json
 """
 
 from __future__ import annotations

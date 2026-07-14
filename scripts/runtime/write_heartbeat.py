@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """write_heartbeat.py — run heartbeat writer (Phase 8).
 
-Called by scripts/run_job_agent.sh at the end of every run (success or
+Called by scripts/runtime/run_job_agent.sh at the end of every run (success or
 failure). Writes logs/heartbeat.json atomically with the last-run
 timestamp, exit code, per-outcome counts for that run, a monotonic
 run counter, and a consecutive-nonzero-exit counter (the restart-loop
@@ -9,7 +9,7 @@ signal). Informational only — never blocks or fails the run: any error
 prints a warning and exits 0.
 
 Usage:
-  python3 scripts/write_heartbeat.py --exit-code 0 \
+  python3 scripts/runtime/write_heartbeat.py --exit-code 0 \
       --applied 2 --needs-review 1 --failed 0 --skipped-unfit 5
 """
 

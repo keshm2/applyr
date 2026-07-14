@@ -23,7 +23,7 @@ import subprocess
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 LABEL = "com.applyr.job-agent"
 OLD_LABEL = "com.ares.job-agent"
 TASK_NAME = "applyr-job-agent"
@@ -41,7 +41,7 @@ def _old_plist_path() -> str:
 
 
 def _plist_body() -> str:
-    runner = os.path.join(PROJECT_ROOT, "scripts", "run_job_agent.sh")
+    runner = os.path.join(PROJECT_ROOT, "scripts", "runtime", "run_job_agent.sh")
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -110,7 +110,7 @@ def _mac_status() -> int:
 
 # -------------------------------------------------------------- Windows ------
 def _win_runner_cmd() -> str:
-    runner = os.path.join(PROJECT_ROOT, "scripts", "run_job_agent.py")
+    runner = os.path.join(PROJECT_ROOT, "scripts", "runtime", "run_job_agent.py")
     return f'"{sys.executable}" "{runner}"'
 
 
@@ -160,7 +160,7 @@ def _linux_note() -> int:
     minutes = INTERVAL // 60
     sys.stderr.write(
         "scheduler: no built-in Linux scheduler — install a systemd user timer "
-        f"running scripts/run_job_agent.sh every {minutes} min "
+        f"running scripts/runtime/run_job_agent.sh every {minutes} min "
         "(APPLYR_SCHEDULE_INTERVAL_SEC). See docs/SETUP.md section 5.\n"
     )
     return 1

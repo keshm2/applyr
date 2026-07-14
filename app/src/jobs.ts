@@ -168,7 +168,7 @@ function runPyJson(root: string, args: string[]): Promise<unknown> {
 
 async function fetchWorkday(root: string, query: string): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
   try {
-    const wd = py(["scripts/fetch_workday_listings.py", "--search", query, "--limit", String(RESULT_CAP), "--timeout", "15"]);
+    const wd = py(["scripts/jobs/fetch_workday_listings.py", "--search", query, "--limit", String(RESULT_CAP), "--timeout", "15"]);
     const { stdout, stderr } = await execFileAsync(
       wd.cmd,
       wd.args,
@@ -222,7 +222,7 @@ export async function searchJobs(root: string, query: string): Promise<SearchRes
 
 async function canonicalize(root: string, job: SearchJob): Promise<CanonicalJob> {
   return await runPyJson(root, [
-    "scripts/job_state.py",
+    "scripts/state/job_state.py",
     "canonicalize",
     JSON.stringify(job),
   ]) as CanonicalJob;
@@ -232,14 +232,14 @@ export async function checkJobFit(root: string, job: SearchJob): Promise<FitResu
   let raw = job;
   if (job.source === "workday") {
     raw = await runPyJson(root, [
-      "scripts/fetch_workday_listings.py",
+      "scripts/jobs/fetch_workday_listings.py",
       "--jd-url",
       job.url,
     ]) as SearchJob;
   }
   const canonical = await canonicalize(root, raw);
   const result = await runPyJson(root, [
-    "scripts/evaluate_job_fit.py",
+    "scripts/jobs/evaluate_job_fit.py",
     JSON.stringify(canonical),
   ]) as FitResult;
   if (!["candidate", "needs_review", "skipped_unfit"].includes(result.fit_status)) {
@@ -267,7 +267,7 @@ function exitCode(err: unknown): number | undefined {
 
 async function appendEntry(root: string, file: string, entry: Record<string, unknown>): Promise<"saved" | "duplicate"> {
   try {
-    const ap = py(["scripts/append_state_entry.py", file, JSON.stringify(entry)]);
+    const ap = py(["scripts/state/append_state_entry.py", file, JSON.stringify(entry)]);
     await execFileAsync(ap.cmd, ap.args, {
       cwd: root,
       encoding: "utf8",
@@ -281,7 +281,7 @@ async function appendEntry(root: string, file: string, entry: Record<string, unk
 
 export async function saveJobForReview(root: string, job: SearchJob): Promise<"saved" | "already_saved"> {
   const canonical = await canonicalize(root, job);
-  await runPyJson(root, ["scripts/job_state.py", "upsert-job", JSON.stringify(canonical)]);
+  await runPyJson(root, ["scripts/state/job_state.py", "upsert-job", JSON.stringify(canonical)]);
   const targets = await readTargets(root);
   const location = (canonical.location ?? "").toLowerCase();
   const preferred = (targets.preferred_locations ?? []).some((candidate) => {
@@ -308,7 +308,7 @@ export async function saveJobForReview(root: string, job: SearchJob): Promise<"s
   }
   await appendEntry(root, "data/review_queue.json", entry);
   await runPyJson(root, [
-    "scripts/job_state.py",
+    "scripts/state/job_state.py",
     "record-event",
     JSON.stringify({
       job_key: canonical.job_key,

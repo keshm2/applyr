@@ -5,10 +5,10 @@ The Manifest V3 extension never touches state files directly. Every read
 and write flows through this bridge, and the bridge itself only shells
 out to the repo's deterministic helpers:
 
-  - scripts/job_state.py       (canonicalize / upsert-job / can-apply / record-event)
-  - scripts/evaluate_job_fit.py (the phase 4 deterministic fit gate)
-  - scripts/append_state_entry.py (atomic appends with the job_id dedup guard)
-  - scripts/sync_internship_tracker.py (best-effort Sheets sync, applied only)
+  - scripts/state/job_state.py       (canonicalize / upsert-job / can-apply / record-event)
+  - scripts/jobs/evaluate_job_fit.py (the phase 4 deterministic fit gate)
+  - scripts/state/append_state_entry.py (atomic appends with the job_id dedup guard)
+  - scripts/jobs/sync_internship_tracker.py (best-effort Sheets sync, applied only)
 
 Security model:
   - Binds to 127.0.0.1 only. Never a public interface.
@@ -21,9 +21,9 @@ Security model:
     user reports after submitting a form themselves.
 
 Usage:
-  python scripts/extension_bridge.py             # start (default port from config)
-  python scripts/extension_bridge.py --port N    # override the port
-  python scripts/extension_bridge.py --show-token
+  python scripts/runtime/extension_bridge.py             # start (default port from config)
+  python scripts/runtime/extension_bridge.py --port N    # override the port
+  python scripts/runtime/extension_bridge.py --show-token
 
 Endpoints (Authorization: Bearer <token> required on all):
   GET  /health      -> {ok, service, version}
@@ -77,7 +77,7 @@ NEW_GRAD_TERMS = (
 
 
 def project_root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 ROOT = project_root()
@@ -185,13 +185,13 @@ def validate_job(payload: dict) -> dict:
 
 
 def canonicalize_and_upsert(job: dict) -> dict:
-    canonical = helper_json(py_helper("scripts/job_state.py", "canonicalize", json.dumps(job)))
-    helper_json(py_helper("scripts/job_state.py", "upsert-job", json.dumps(canonical)))
+    canonical = helper_json(py_helper("scripts/state/job_state.py", "canonicalize", json.dumps(job)))
+    helper_json(py_helper("scripts/state/job_state.py", "upsert-job", json.dumps(canonical)))
     return canonical
 
 
 def can_apply(canonical: dict) -> tuple:
-    proc = run_helper(py_helper("scripts/job_state.py", "can-apply", json.dumps(canonical)))
+    proc = run_helper(py_helper("scripts/state/job_state.py", "can-apply", json.dumps(canonical)))
     if proc.returncode == 0:
         return True, ""
     if proc.returncode == 2:
@@ -209,7 +209,7 @@ def can_apply(canonical: dict) -> tuple:
 
 def append_entry(file_rel: str, entry: dict) -> str:
     """append via the dedup-guarded helper. Returns 'saved' or 'duplicate'."""
-    proc = run_helper(py_helper("scripts/append_state_entry.py", file_rel, json.dumps(entry)))
+    proc = run_helper(py_helper("scripts/state/append_state_entry.py", file_rel, json.dumps(entry)))
     if proc.returncode == 0:
         return "saved"
     if proc.returncode == 2:
@@ -220,7 +220,7 @@ def append_entry(file_rel: str, entry: dict) -> str:
 def record_event(canonical: dict, status: str, reasoning: str, url: str) -> None:
     helper_json(
         py_helper(
-            "scripts/job_state.py",
+            "scripts/state/job_state.py",
             "record-event",
             json.dumps({
                 "job_key": canonical["job_key"],
@@ -239,7 +239,7 @@ def sheets_sync(canonical: dict, date_applied: str) -> str:
     try:
         proc = run_helper(
             py_helper(
-                "scripts/sync_internship_tracker.py",
+                "scripts/jobs/sync_internship_tracker.py",
                 json.dumps({
                     "company": canonical.get("company"),
                     "title": canonical.get("title"),
@@ -269,7 +269,7 @@ def handle_fit(payload: dict) -> dict:
         # bypass every deterministic hard-reject check in the fit gate.
         raise ValueError("job.jd_text is required — extract the posting description before the fit check")
     canonical = canonicalize_and_upsert(job)
-    fit = helper_json(py_helper("scripts/evaluate_job_fit.py", json.dumps(canonical)))
+    fit = helper_json(py_helper("scripts/jobs/evaluate_job_fit.py", json.dumps(canonical)))
     if fit.get("fit_status") not in {"candidate", "needs_review", "skipped_unfit"}:
         raise RuntimeError("fit helper returned an unexpected status")
     applyable, refusal = can_apply(canonical)
@@ -412,9 +412,9 @@ def main() -> int:
 
     # Ensure the state files the helpers append to exist before serving.
     for ensure in (
-        py_helper("scripts/job_state.py", "ensure-files"),
-        py_helper("scripts/append_state_entry.py", "ensure", "data/applied_jobs.json"),
-        py_helper("scripts/append_state_entry.py", "ensure", "data/review_queue.json"),
+        py_helper("scripts/state/job_state.py", "ensure-files"),
+        py_helper("scripts/state/append_state_entry.py", "ensure", "data/applied_jobs.json"),
+        py_helper("scripts/state/append_state_entry.py", "ensure", "data/review_queue.json"),
     ):
         proc = run_helper(ensure)
         if proc.returncode != 0:

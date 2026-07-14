@@ -17,10 +17,10 @@ optional TUI + browser extension:
 ```bash
 # Easiest — one command: downloads into ~/applyr, runs the installer,
 # and puts the `applyr` command on your PATH (~/.local/bin):
-curl -fsSL https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install/install.sh | bash
 
 # Or from an unpacked release archive (no git clone required):
-bash scripts/install.sh
+bash scripts/install/install.sh
 
 # Or via npm (installs the `applyr` TUI command; on first run with no
 # core it offers to download the core for you):
@@ -30,7 +30,7 @@ npm install -g @keshm/applyr
 ```powershell
 # Windows PowerShell (native, no WSL): downloads into %USERPROFILE%\applyr,
 # runs the installer, and puts the `applyr` command on your PATH.
-irm https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install/install.ps1 | iex
 
 # Or from an unpacked release archive:
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
@@ -41,7 +41,7 @@ checks the `VERSION` file on GitHub `main` and self-updates when a
 newer build was pushed (fail-open — no network just means no update).
 Git checkouts fast-forward pull; archive installs overlay the new
 tarball; live config, `data/`, and `logs/` are never touched. Run one
-manually with `applyr update` (or `bash scripts/update.sh`); opt out
+manually with `applyr update` (or `bash scripts/install/update.sh`); opt out
 with `APPLYR_AUTO_UPDATE=0`.
 
 The installer also prompts for your profile (the `safe_fields` used to
@@ -73,7 +73,7 @@ The release page also exposes the standard
 "Source code (zip)" / "Source code (tar.gz)" assets directly — pick
 whichever works behind your network.
 
-**Uninstall.** `applyr uninstall` (or `bash scripts/uninstall.sh`)
+**Uninstall.** `applyr uninstall` (or `bash scripts/install/uninstall.sh`)
 removes the launchd schedule and the `applyr` command, then asks
 before deleting the install directory (it holds your config, data,
 and resumes). `--keep-data` keeps the directory; `--yes` skips the
@@ -88,7 +88,7 @@ writes the choice to `config/harness.json` (change it any time by
 editing that file, re-running the installer, or per-run with
 `APPLYR_HARNESS=opencode|claude|codex|copilot`). Then fill in the
 placeholders (section 2, or `applyr setup`) and start a run with
-`bash scripts/run_job_agent.sh`.
+`bash scripts/runtime/run_job_agent.sh`.
 
 Per-harness notes:
 
@@ -170,7 +170,7 @@ configs are treated as enabled):
 ## 3. Validate
 
 ```bash
-bash scripts/validate_local_config.sh
+bash scripts/validate/validate_local_config.sh
 ```
 
 - Prints `validate_local_config: OK` on success — config is ready.
@@ -201,7 +201,7 @@ Behavior:
   (`auto-seeded from vetted list …`) so you are not surprised — review
   the change in `config/targets.json` and edit or revert if unwanted.
 - The seeder can also be run directly:
-  `python3 scripts/seed_vetted_slugs.py`
+  `python3 scripts/validate/seed_vetted_slugs.py`
 
 **Provenance.** The vetted lists are trust-bearing, project-owned
 artifacts committed to the repo. Every slug was hand-verified against
@@ -235,7 +235,7 @@ Commands:
 - `applyr review` — triage the review queue: open the posting, mark
   applied, or dismiss (recorded via the state helpers).
 - `applyr history` — browse recorded outcomes.
-- `applyr run` — trigger `scripts/run_job_agent.sh` and stream the
+- `applyr run` — trigger `scripts/runtime/run_job_agent.sh` and stream the
   session log.
 
 The app opens on a **welcome menu** that lets you choose where to go
@@ -289,15 +289,15 @@ a hung run older than 60 minutes (`APPLYR_LOCK_MAX_AGE_MIN`) is
 terminated and reclaimed so a wedged run never blocks the schedule.
 
 ```bash
-bash scripts/scheduler.sh install     # write + load the plist (a run starts immediately)
-bash scripts/scheduler.sh status      # loaded? + current heartbeat
-bash scripts/scheduler.sh uninstall   # stop the schedule
-bash scripts/scheduler.sh plist       # print the plist without installing
+bash scripts/runtime/scheduler.sh install     # write + load the plist (a run starts immediately)
+bash scripts/runtime/scheduler.sh status      # loaded? + current heartbeat
+bash scripts/runtime/scheduler.sh uninstall   # stop the schedule
+bash scripts/runtime/scheduler.sh plist       # print the plist without installing
 ```
 
 On Linux, create the equivalent systemd user timer by hand
 (`OnUnitActiveSec=30min`, `WorkingDirectory=` the repo root, command
-`/bin/bash scripts/run_job_agent.sh`).
+`/bin/bash scripts/runtime/run_job_agent.sh`).
 
 **What to check first when something looks wrong:**
 
@@ -331,13 +331,13 @@ and automatic applications dedupe against each other.
   Fields the profile cannot answer are highlighted amber — never
   invented.
 - All reads/writes go through a **localhost-only bridge**
-  (`scripts/extension_bridge.py`) authenticated by a per-install token;
+  (`scripts/runtime/extension_bridge.py`) authenticated by a per-install token;
   the bridge only shells out to the repo's standard state helpers.
 
 **1. Start the bridge** (from the repo root):
 
 ```bash
-python3 scripts/extension_bridge.py
+python3 scripts/runtime/extension_bridge.py
 ```
 
 ```powershell
@@ -347,7 +347,7 @@ py -3 scripts\extension_bridge.py
 The first start generates `config/extension_bridge.json` (gitignored,
 `chmod 600`) with the per-install token and default port `8377`.
 Print the token any time with
-`python3 scripts/extension_bridge.py --show-token` (Windows:
+`python3 scripts/runtime/extension_bridge.py --show-token` (Windows:
 `py -3 scripts\extension_bridge.py --show-token`). Leave the bridge
 running while you use the extension.
 
@@ -393,7 +393,7 @@ configs, state, and resumes — point the TUI at the right one with
 `APPLYR_ROOT`. One caveat: the 30-minute launchd schedule (§3.5) uses
 the fixed label `com.applyr.job-agent`, so only **one** clone per
 macOS user account can have the always-on schedule installed; run the
-second clone on demand (`bash scripts/run_job_agent.sh`) or from
+second clone on demand (`bash scripts/runtime/run_job_agent.sh`) or from
 another OS user account. Profile-based multi-user (one install, many
 profiles) is deliberately deferred to a future phase — see the
 "Single-user deployment" section of `AGENTS.md` for the seams a
@@ -402,12 +402,12 @@ future migration would use.
 ## 3.8 Per-agent quickstarts (Phase 16)
 
 applyr runs under any of the four major coding agents. Pick one,
-install it, run `bash scripts/install.sh`, and the installer detects
+install it, run `bash scripts/install/install.sh`, and the installer detects
 it and writes `config/harness.json` (asking when more than one is
 present). Change agents any time by editing that file or setting
 `APPLYR_HARNESS=opencode|claude|codex|copilot` per run. The business
 logic is identical under every agent — only the thin adapter in
-`scripts/run_job_agent.sh` differs; capability differences and the
+`scripts/runtime/run_job_agent.sh` differs; capability differences and the
 degraded paths are defined in `AGENTS.md` "Harness capability
 matrix".
 
@@ -439,7 +439,7 @@ matrix".
   approval; review what that means for your machine before
   scheduling it.
 
-### Conformance results (scripts/run_conformance.py)
+### Conformance results (scripts/validate/run_conformance.py)
 
 The conformance suite pushes a golden job batch through
 canonicalize → fit gate → state writes against temp files (13
@@ -449,8 +449,8 @@ asserts the golden `job_key` lands in the transcript. A missing CLI
 reports `SKIP`, never a false pass. Re-run any time:
 
 ```bash
-python3 scripts/run_conformance.py                 # deterministic core
-python3 scripts/run_conformance.py --harness all   # + installed CLIs (1 small LLM call each)
+python3 scripts/validate/run_conformance.py                 # deterministic core
+python3 scripts/validate/run_conformance.py --harness all   # + installed CLIs (1 small LLM call each)
 ```
 
 | Leg | Result | Date |
@@ -546,7 +546,7 @@ email.
 ### 4.5 Validate
 
 ```bash
-bash scripts/validate_local_config.sh
+bash scripts/validate/validate_local_config.sh
 ```
 
 The Sheets config is validated in a Phase 3-appropriate way:
@@ -560,7 +560,7 @@ The Sheets config is validated in a Phase 3-appropriate way:
 ### 4.6 Test a single append manually
 
 ```bash
-python3 scripts/sync_internship_tracker.py '{"title":"Test Role","company":"Test Co","date_applied":"2026-07-01","internship_term":"Summer 2026"}'
+python3 scripts/jobs/sync_internship_tracker.py '{"title":"Test Role","company":"Test Co","date_applied":"2026-07-01","internship_term":"Summer 2026"}'
 ```
 
 A successful sync prints a JSON result with `"synced": true` and the

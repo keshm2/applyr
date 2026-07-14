@@ -2,7 +2,7 @@
 """job_state.py — canonical internal job/event model helpers (Phase 1).
 
 Deterministic, stdlib-only helpers for the canonical local job registry and
-the internal event log. Run from the project root (scripts/run_job_agent.sh
+the internal event log. Run from the project root (scripts/runtime/run_job_agent.sh
 cd's there before invoking this).
 
 Local state files (relative to the current working directory):

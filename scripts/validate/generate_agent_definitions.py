@@ -31,7 +31,7 @@ HARNESSES = ("opencode", "claude")
 MARKER = (
     "<!-- GENERATED from agents/bodies/{name}.md + "
     "agents/frontmatter/{harness}/{name}.yaml — edit those sources and run "
-    "scripts/generate_agent_definitions.py -->"
+    "scripts/validate/generate_agent_definitions.py -->"
 )
 
 OUT_DIRS = {"opencode": ".opencode/agents", "claude": ".claude/agents"}
@@ -95,8 +95,8 @@ def main(argv=None) -> int:
     if args.check:
         if stale:
             print(
-                "generate_agent_definitions: STALE (re-run scripts/"
-                f"generate_agent_definitions.py): {', '.join(stale)}",
+                "generate_agent_definitions: STALE (re-run "
+                f"scripts/validate/generate_agent_definitions.py): {', '.join(stale)}",
                 file=sys.stderr,
             )
             return 1

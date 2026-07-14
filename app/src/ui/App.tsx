@@ -115,7 +115,7 @@ export function App({
   const [confirmQuit, setConfirmQuit] = useState(false);
   // Update prompt: shown once per session when cli.tsx detected a newer
   // upstream VERSION. Dismissed on "no"; "yes" hands off to cli.tsx
-  // (which runs scripts/update.py after the TUI exits the alt screen).
+  // (which runs scripts/install/update.py after the TUI exits the alt screen).
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const showUpdateBox = Boolean(updateVersion) && !updateDismissed;
   // The welcome walkthrough opens every plain `applyr` launch; jumping

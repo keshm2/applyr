@@ -20,7 +20,7 @@ export function findProjectRoot(): string {
     let dir = path.resolve(start);
     for (;;) {
       if (
-        fs.existsSync(path.join(dir, "scripts", "job_state.py")) &&
+        fs.existsSync(path.join(dir, "scripts", "state", "job_state.py")) &&
         fs.existsSync(path.join(dir, "AGENTS.md"))
       ) {
         return dir;
@@ -31,7 +31,7 @@ export function findProjectRoot(): string {
     }
   }
   throw new Error(
-    "Could not locate the applyr project root (scripts/job_state.py + AGENTS.md). " +
+    "Could not locate the applyr project root (scripts/state/job_state.py + AGENTS.md). " +
       "Run from inside the repo or set APPLYR_ROOT.",
   );
 }

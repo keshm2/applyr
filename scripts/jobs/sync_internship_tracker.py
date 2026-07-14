@@ -16,9 +16,9 @@ result and exits 0 so the application run can continue. Local job state
 truth regardless of sync outcome.
 
 Usage:
-  python3 scripts/sync_internship_tracker.py '<payload-json>'
-  python3 scripts/sync_internship_tracker.py -            # read payload from stdin
-  python3 scripts/sync_internship_tracker.py '<payload-json>' --config <path>
+  python3 scripts/jobs/sync_internship_tracker.py '<payload-json>'
+  python3 scripts/jobs/sync_internship_tracker.py -            # read payload from stdin
+  python3 scripts/jobs/sync_internship_tracker.py '<payload-json>' --config <path>
 
 Payload fields (all optional unless noted):
   title            (required) → Role Name

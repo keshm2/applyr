@@ -26,7 +26,7 @@ Determine what your harness can actually do, then follow the
    bounded work — a violation here is what makes runs grind for an hour):
    - Redirect EVERY board fetch and fetch-helper output to a file under
      logs/tmp/ (`mkdir -p logs/tmp` first), e.g.
-     `python3 scripts/fetch_simplify_listings.py > logs/tmp/simplify.jsonl`.
+     `python3 scripts/jobs/fetch_simplify_listings.py > logs/tmp/simplify.jsonl`.
      NEVER print raw posting dumps into the session transcript; after
      each fetch print only the board name and `wc -l` count.
    - Prefilter raw postings DETERMINISTICALLY before canonicalizing:
@@ -53,7 +53,7 @@ Determine what your harness can actually do, then follow the
      do not abort the run. Continue with the remaining boards normally.
 2. For SimplifyJobs: run the deterministic fetch helper — never scrape
    GitHub with Playwright:
-   `python3 scripts/fetch_simplify_listings.py`
+   `python3 scripts/jobs/fetch_simplify_listings.py`
    It reads config/targets.json "simplify_feeds" and prints one raw-job
    JSON object per line (source "simplify") for active + visible
    postings.
@@ -71,7 +71,7 @@ Determine what your harness can actually do, then follow the
      it; the fit gate is the only classifier.
 3. For Workday tenants: use the deterministic fetch helper — only fall
    back to Playwright for a posting when the helper fails for it:
-   `python3 scripts/fetch_workday_listings.py --search "intern" --limit 200`
+   `python3 scripts/jobs/fetch_workday_listings.py --search "intern" --limit 200`
    It reads config/targets.json "workday_tenants" ("<host>/<site>"
    strings, e.g. "nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite")
    and prints one raw-job JSON object per line (source "workday") via
@@ -83,7 +83,7 @@ Determine what your harness can actually do, then follow the
    - Workday listings carry NO JD text. After role filtering (step 8)
      and BEFORE the fit gate (step 10), fetch the JD per surviving
      candidate:
-     `python3 scripts/fetch_workday_listings.py --jd-url '<posting-url>'`
+     `python3 scripts/jobs/fetch_workday_listings.py --jd-url '<posting-url>'`
      then re-canonicalize and upsert with the fetched jd_text. Never
      fit-gate a Workday job with empty jd_text. If the JD fetch fails,
      fall back to Playwright on the posting URL; if that also fails,
@@ -102,12 +102,12 @@ Determine what your harness can actually do, then follow the
    listings, full JD text, and application URLs.
 5. Canonicalize each raw job that survived the step 0 prefilter into one
    internal record:
-   `python3 scripts/job_state.py canonicalize '<raw-job-json>'`
+   `python3 scripts/state/job_state.py canonicalize '<raw-job-json>'`
    Pass the raw job (company, title, url, source, jd_text, location, etc.)
    as a single JSON object string. The helper returns a canonical job JSON
    with a stable job_key (the canonical identity) and a job_id.
 6. Upsert each canonical record into the registry:
-   `python3 scripts/job_state.py upsert-job '<canonical-job-json>'`
+   `python3 scripts/state/job_state.py upsert-job '<canonical-job-json>'`
    The helper merges by job_key — duplicates collapse into one record
    and source listings are merged into the record's sources array. This
    upsert canonicalizes raw jobs and preserves source merges; it is NOT
@@ -135,7 +135,7 @@ Determine what your harness can actually do, then follow the
 9. Season is not a filter — internships/co-ops in any season are in scope.
 10. Run the deterministic JD fit gate on every role-filtered candidate
     before tailoring:
-    `python3 scripts/evaluate_job_fit.py '<canonical-job-json>'`
+    `python3 scripts/jobs/evaluate_job_fit.py '<canonical-job-json>'`
     Pass the canonical job JSON (the same object upserted into the
     registry). The helper returns a JSON object with at least fit_status,
     fit_score, reasoning, fit_reasons, matched_role_keyword,
@@ -151,7 +151,7 @@ Determine what your harness can actually do, then follow the
       deterministic hard reject, e.g. 3+ years required, out of US
       scope). Record a local-only skipped_unfit event via record-event
       using the helper's reasoning:
-      `python3 scripts/job_state.py record-event '{"status":"skipped_unfit","job_key":"...","company":"...","title":"...","url":"...","reasoning":"<helper reasoning>"}'`
+      `python3 scripts/state/job_state.py record-event '{"status":"skipped_unfit","job_key":"...","company":"...","title":"...","url":"...","reasoning":"<helper reasoning>"}'`
       Do not route to Discord, data/applied_jobs.json, the Google Sheet,
       or @resume-tailor. This replaces the manual 3+ years / out of US
       hard-reject check — the fit helper is the deterministic gate.
@@ -161,7 +161,7 @@ Determine what your harness can actually do, then follow the
       apply. Do all of the following:
       a. Append a needs_review entry to data/applied_jobs.json via the
          state helper:
-         `bash scripts/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
+         `bash scripts/state/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
          Follow the File write discipline schema (job_id, company, title,
          url, date_applied, status="needs_review", role_type, source,
          resume_used="balanced", ats_score=0, location_tier,
@@ -169,7 +169,7 @@ Determine what your harness can actually do, then follow the
          source, and location_tier come from the canonical job record /
          scrape_batch entry.
       b. Append to data/review_queue.json via the state helper:
-         `bash scripts/append_state_entry.sh data/review_queue.json '<entry-json>'`
+         `bash scripts/state/append_state_entry.sh data/review_queue.json '<entry-json>'`
       c. Record a needs_review event via record-event.
       d. Invoke @discord-reporter with the needs_review outcome (company,
          title, url, source, reasoning) so it routes to the needs_review
@@ -209,7 +209,7 @@ For each job in scrape_batch.json:
     from re-tailoring the same job forever:
     a. Append a needs_review entry to data/applied_jobs.json via the
        state helper:
-       `bash scripts/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
+       `bash scripts/state/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
        Follow the File write discipline schema (job_id, company, title,
        url, date_applied, status="needs_review", role_type, source,
        resume_used, ats_score, location_tier, cover_letter_used=false,
@@ -228,7 +228,7 @@ For each job in scrape_batch.json:
 For each job with ats_score >= 60:
 1. Re-check fit and eligibility immediately before applying:
    a. Re-run the deterministic fit gate (pre-apply fit confirmation):
-      `python3 scripts/evaluate_job_fit.py '<canonical-job-json>'`
+      `python3 scripts/jobs/evaluate_job_fit.py '<canonical-job-json>'`
       If the helper exits non-zero, returns invalid JSON, or returns an
       unexpected fit_status, treat the job as needs_review and do not
       apply. If fit_status is not candidate, do not apply. Handle
@@ -238,7 +238,7 @@ For each job with ats_score >= 60:
       @discord-reporter needs_review route). Then skip the job — do not
       tailor further and do not attempt the application.
    b. Re-check eligibility via can-apply:
-      `python3 scripts/job_state.py can-apply '<canonical-job-json>'`
+      `python3 scripts/state/job_state.py can-apply '<canonical-job-json>'`
       This is the dedupe recheck against the registry and applied
       history. If the helper refuses (returns non-zero or prints "no"),
       skip the job and record a skipped_unfit event via record-event. Do
@@ -259,14 +259,14 @@ For each job with ats_score >= 60:
 7. Log result to data/applied_jobs.json immediately via the state helper —
    do not batch writes.
 8. Record an internal event for the outcome via the canonical helper:
-   `python3 scripts/job_state.py record-event '<event-json>'`
+   `python3 scripts/state/job_state.py record-event '<event-json>'`
    Use status "applied", "needs_review", or "failed" matching the
    status written to applied_jobs.json. Include job_key and reasoning
    for needs_review and failed.
 9. If and only if the outcome status is "applied", sync exactly one row
    to the Google Sheet internship tracker (after the applied_jobs.json
    entry and the internal event are recorded):
-   `python3 scripts/sync_internship_tracker.py '<row-json>'`
+   `python3 scripts/jobs/sync_internship_tracker.py '<row-json>'`
    Build the row JSON from the user-facing tracker fields only — never
    send internal-only fields (job_key, external_job_id, normalized_url,
    normalized_apply_url, ats_system, ats_score, resume_used,
@@ -344,14 +344,14 @@ After all applications:
 - Handshake requires a student login session. If Playwright cannot
   authenticate, skip Handshake and log one "handshake_auth_needed" entry
   to data/review_queue.json via the state helper — do not retry in a loop.
-- ALWAYS run `python3 scripts/job_state.py ensure-files` and read
+- ALWAYS run `python3 scripts/state/job_state.py ensure-files` and read
   data/job_registry.json before starting. Build your canonical dedup set
   from the registry.
 - ALWAYS canonicalize every scraped raw job via the canonical helper and
   upsert into data/job_registry.json before any dedup or filtering
   decision.
 - ALWAYS run the deterministic JD fit gate
-  (scripts/evaluate_job_fit.py) on every canonical job after role
+  (scripts/jobs/evaluate_job_fit.py) on every canonical job after role
   filtering and before tailoring. Only candidate jobs proceed to
   @resume-tailor. skipped_unfit is local-only; needs_review from the
   fit gate is a user-visible manual-review outcome (append to
@@ -373,7 +373,7 @@ After all applications:
 - ALWAYS record an internal event via record-event for every applied,
   needs_review, or failed outcome.
 - ONLY sync successful applications (status "applied") to the Google
-  Sheet internship tracker via scripts/sync_internship_tracker.py —
+  Sheet internship tracker via scripts/jobs/sync_internship_tracker.py —
   exactly one row per successful application, after the applied_jobs.json
   entry and internal event are recorded. Pass only the user-facing
   tracker fields (company, title, date_applied, internship_term, notes);
@@ -399,15 +399,15 @@ After all applications:
   hand-write jq one-liners to mutate state files directly. The helper
   handles atomic write, array append, and dedup guard.
   - Append to applied_jobs.json:
-    `bash scripts/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
+    `bash scripts/state/append_state_entry.sh data/applied_jobs.json '<entry-json>'`
   - Append to review_queue.json:
-    `bash scripts/append_state_entry.sh data/review_queue.json '<entry-json>'`
+    `bash scripts/state/append_state_entry.sh data/review_queue.json '<entry-json>'`
   - Pass the entry as a single JSON object string. Do not construct tmp
     files or mv commands yourself.
 - Canonical registry and event log writes go through the canonical helper
-  (scripts/job_state.py), not append_state_entry.sh:
-  `python3 scripts/job_state.py upsert-job '<canonical-job-json>'`
-  `python3 scripts/job_state.py record-event '<event-json>'`
+  (scripts/state/job_state.py), not append_state_entry.sh:
+  `python3 scripts/state/job_state.py upsert-job '<canonical-job-json>'`
+  `python3 scripts/state/job_state.py record-event '<event-json>'`
   See AGENTS.md "Canonical registry and event log" for the full flow.
 - applied_jobs.json and review_queue.json entries with status "failed" or
   "needs_review" must include a "reasoning" field — a specific, one-

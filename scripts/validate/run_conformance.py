@@ -18,9 +18,9 @@ Two legs:
    a failure, so results stay honest on machines without all four.
 
 Usage:
-  python3 scripts/run_conformance.py                # deterministic leg
-  python3 scripts/run_conformance.py --harness all  # + every installed CLI
-  python3 scripts/run_conformance.py --harness codex
+  python3 scripts/validate/run_conformance.py                # deterministic leg
+  python3 scripts/validate/run_conformance.py --harness all  # + every installed CLI
+  python3 scripts/validate/run_conformance.py --harness codex
 
 Output: one machine-parseable line per check
   conformance: <check> PASS|FAIL|SKIP[ — detail]
@@ -37,7 +37,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HARNESSES = ("opencode", "claude", "codex", "copilot")
 HARNESS_TIMEOUT_S = 300
 
@@ -148,7 +148,7 @@ def deterministic_leg() -> None:
     canonical: dict[str, dict] = {}
     for job in GOLDEN_JOBS:
         name, expect = job["name"], job["expect"]
-        p = run([sys.executable, helper("job_state.py"), "canonicalize", json.dumps(job["raw"])])
+        p = run([sys.executable, helper("state/job_state.py"), "canonicalize", json.dumps(job["raw"])])
         if p.returncode != 0:
             report(f"canonicalize:{name}", "FAIL", p.stderr.strip()[-120:])
             continue
@@ -159,7 +159,7 @@ def deterministic_leg() -> None:
         report(f"canonicalize:{name}", "PASS" if got == want else "FAIL",
                "" if got == want else f"got {got}")
 
-        p = run([sys.executable, helper("evaluate_job_fit.py"), json.dumps(rec), "--targets", targets])
+        p = run([sys.executable, helper("jobs/evaluate_job_fit.py"), json.dumps(rec), "--targets", targets])
         try:
             fit = json.loads(p.stdout)
         except json.JSONDecodeError:
@@ -171,7 +171,7 @@ def deterministic_leg() -> None:
                "" if got == want else f"got {got}")
 
     # State writes — temp registry/events/applied only.
-    state = [sys.executable, helper("job_state.py")]
+    state = [sys.executable, helper("state/job_state.py")]
     p1 = run(state + ["ensure-files", "--registry", registry, "--events", events])
     p2 = run(state + ["ensure-files", "--registry", registry, "--events", events])
     report("state:ensure-files-idempotent",
@@ -209,8 +209,8 @@ def deterministic_leg() -> None:
                f"latest_status={latest}")
 
     entry = json.dumps({"job_id": "conformance-1", "company": "GoldenCo", "title": "SWE Intern"})
-    p1 = run([sys.executable, helper("append_state_entry.py"), applied, entry])
-    p2 = run([sys.executable, helper("append_state_entry.py"), applied, entry])
+    p1 = run([sys.executable, helper("state/append_state_entry.py"), applied, entry])
+    p2 = run([sys.executable, helper("state/append_state_entry.py"), applied, entry])
     report("state:append-dedup",
            "PASS" if p1.returncode == 0 and p2.returncode == 2 else "FAIL",
            f"rc1={p1.returncode} rc2={p2.returncode}")
@@ -228,7 +228,7 @@ def harness_leg(harness: str) -> None:
     prompt = (
         "Run exactly this one shell command from the repository root, print "
         "its full stdout verbatim, and then stop (do not do anything else): "
-        f"python3 scripts/job_state.py canonicalize '{raw}'"
+        f"python3 scripts/state/job_state.py canonicalize '{raw}'"
     )
     cmd = {
         "opencode": ["opencode", "run", prompt],
@@ -236,7 +236,7 @@ def harness_leg(harness: str) -> None:
         # claude otherwise declines Bash without .claude/settings.json.
         # --allowedTools is variadic, so it must come AFTER the prompt.
         "claude": ["claude", "-p", prompt, "--allowedTools",
-                   "Bash(python3 scripts/job_state.py:*)"],
+                   "Bash(python3 scripts/state/job_state.py:*)"],
         "codex": ["codex", "exec", prompt],
         "copilot": ["copilot", "-p", prompt, "--allow-all-tools"],
     }[harness]

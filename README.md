@@ -33,13 +33,13 @@ up whatever you have and asks if you have more than one.
 **macOS / Linux:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-irm https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install/install.ps1 | iex
 ```
 
 **Or via npm:**
@@ -86,7 +86,7 @@ applyr run                # one agent run in this terminal
 applyr setup [--check]    # config wizard / validate only
 applyr review | history   # jump straight to a screen
 
-bash scripts/scheduler.sh install    # 30-minute always-on schedule (launchd)
+bash scripts/runtime/scheduler.sh install    # 30-minute always-on schedule (launchd)
 ```
 
 Updates happen automatically — each run and TUI launch checks for

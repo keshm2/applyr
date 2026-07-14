@@ -37,8 +37,8 @@ State writes go through the repo's Python/bash helpers — the TUI never
 edits state JSON directly. Set APPLYR_ROOT to run outside the repo.`;
 
 const VERSION_URL = "https://raw.githubusercontent.com/keshm2/applyr/main/VERSION";
-const BOOTSTRAP_URL = "https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install.sh";
-const BOOTSTRAP_URL_PS1 = "https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install.ps1";
+const BOOTSTRAP_URL = "https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install/install.sh";
+const BOOTSTRAP_URL_PS1 = "https://raw.githubusercontent.com/keshm2/applyr/main/scripts/install/install.ps1";
 
 /** The one-command core bootstrap for the current OS. */
 function bootstrapOneLiner(): string {
@@ -76,7 +76,7 @@ async function detectUpdate(root: string): Promise<string | null> {
 /** Run the updater now (after the TUI has left the alternate screen).
  *  Mirrors the old silent auto-update install step. */
 function installUpdate(root: string): void {
-  const upd = py(["scripts/update.py", "--auto"]);
+  const upd = py(["scripts/install/update.py", "--auto"]);
   const r = spawnSync(upd.cmd, upd.args, { cwd: root, stdio: "inherit" });
   if (r.status === 0) {
     console.log("Update installed — restart applyr to load it.\n");
@@ -152,7 +152,7 @@ async function openApp(root: string, initialTab: Tab, updateVersion?: string): P
   const restore = () => process.stdout.write(leave);
   process.on("exit", restore);
   // The UpdateBox calls this when the user accepts the update; we run
-  // scripts/update.py AFTER the alt screen is restored below so its
+  // scripts/install/update.py AFTER the alt screen is restored below so its
   // stdio-inherit output lands on the normal screen, not inside the TUI.
   let installAfterExit = false;
   try {
@@ -224,12 +224,12 @@ async function main(): Promise<number> {
       pendingUpdate = await detectUpdate(root);
       break;
     case "update": {
-      const upd = py(["scripts/update.py"]);
+      const upd = py(["scripts/install/update.py"]);
       const r = spawnSync(upd.cmd, upd.args, { cwd: root, stdio: "inherit" });
       return r.status ?? 1;
     }
     case "uninstall": {
-      const un = py(["scripts/uninstall.py", ...rest]);
+      const un = py(["scripts/install/uninstall.py", ...rest]);
       const r = spawnSync(un.cmd, un.args, { cwd: root, stdio: "inherit" });
       return r.status ?? 1;
     }

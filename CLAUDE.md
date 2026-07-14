@@ -19,8 +19,8 @@ local-only).
 - Work **one phase at a time**. Do not start a phase (or the next one)
   without the operator's explicit go-ahead; stop after printing the
   phase summary.
-- **All state writes go through the helpers** (`scripts/job_state.py`,
-  `scripts/append_state_entry.sh`). Never hand-write or hand-edit
+- **All state writes go through the helpers** (`scripts/state/job_state.py`,
+  `scripts/state/append_state_entry.sh`). Never hand-write or hand-edit
   `data/*.json` / `data/*.jsonl`.
 - **Gitignored files stay uncommitted**: live configs in
   `config/*.json`, everything in `data/`, `logs/`, `docs/PLAN.md`, and
@@ -48,12 +48,12 @@ local-only).
 ## Common commands
 
 ```bash
-bash scripts/install.sh                    # universal first-run installer
-bash scripts/validate_local_config.sh      # config check (expect "OK")
-python3 scripts/job_state.py ensure-files  # bootstrap/validate state files
-bash scripts/run_job_agent.sh              # trigger one agent run
-bash scripts/scheduler.sh status           # 30-min launchd schedule state
-python3 scripts/generate_agent_definitions.py --check   # agent-def drift check
+bash scripts/install/install.sh                    # universal first-run installer
+bash scripts/validate/validate_local_config.sh      # config check (expect "OK")
+python3 scripts/state/job_state.py ensure-files  # bootstrap/validate state files
+bash scripts/runtime/run_job_agent.sh              # trigger one agent run
+bash scripts/runtime/scheduler.sh status           # 30-min launchd schedule state
+python3 scripts/validate/generate_agent_definitions.py --check   # agent-def drift check
 
 cd app && npm install && npm run build     # build the TUI
 npm link                                   # exposes the `applyr` command
@@ -66,9 +66,9 @@ npm run typecheck && npm run smoke         # TUI CI checks
 - The agent definitions in `.claude/agents/` and `.opencode/agents/`
   are **generated** from `agents/bodies/` +
   `agents/frontmatter/<harness>/` by
-  `scripts/generate_agent_definitions.py`. Edit the sources, then
+  `scripts/validate/generate_agent_definitions.py`. Edit the sources, then
   regenerate — never the generated files.
-- Runtime runs go through `scripts/run_job_agent.sh`, which selects the
+- Runtime runs go through `scripts/runtime/run_job_agent.sh`, which selects the
   harness (opencode or Claude Code) via `config/harness.json`,
   `$APPLYR_HARNESS` (legacy `$ARES_HARNESS` still honored), or
   auto-detection. Claude Code is both a supported runtime driver and a

@@ -36,7 +36,7 @@ import tempfile
 import time
 import urllib.request
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 VERSION_URL = os.environ.get(
     "APPLYR_UPDATE_URL",
@@ -187,12 +187,12 @@ def _safe_extractall(tar, dest_root, members) -> None:
 
 def _post_update(say) -> None:
     # Each step warn-only so a hiccup never bricks an already-updated install.
-    if subprocess.run([sys.executable, "scripts/generate_agent_definitions.py"],
+    if subprocess.run([sys.executable, "scripts/validate/generate_agent_definitions.py"],
                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
-        say("WARNING: agent-definition regeneration failed — run scripts/generate_agent_definitions.py")
-    if subprocess.run([sys.executable, "scripts/validate_local_config.py"],
+        say("WARNING: agent-definition regeneration failed — run scripts/validate/generate_agent_definitions.py")
+    if subprocess.run([sys.executable, "scripts/validate/validate_local_config.py"],
                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
-        say("WARNING: config validation reported issues — run scripts/validate_local_config.py")
+        say("WARNING: config validation reported issues — run scripts/validate/validate_local_config.py")
     npm = shutil.which("npm")
     if npm:
         for rel, label in (("app", "TUI"), ("extension", "browser extension")):

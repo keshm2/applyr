@@ -18,7 +18,7 @@ function run(root: string, cmd: string, args: string[]): string {
 
 export function appendAppliedJob(root: string, entry: AppliedJob): void {
   const { cmd, args } = py([
-    "scripts/append_state_entry.py",
+    "scripts/state/append_state_entry.py",
     "data/applied_jobs.json",
     JSON.stringify(entry),
   ]);
@@ -36,7 +36,7 @@ export function recordEvent(
     url?: string;
   },
 ): void {
-  const { cmd, args } = py(["scripts/job_state.py", "record-event", JSON.stringify(event)]);
+  const { cmd, args } = py(["scripts/state/job_state.py", "record-event", JSON.stringify(event)]);
   run(root, cmd, args);
 }
 
@@ -64,7 +64,7 @@ export function syncInternshipTracker(
     notes?: string;
   },
 ): TrackerSyncResult {
-  const sync = py(["scripts/sync_internship_tracker.py", JSON.stringify(row)]);
+  const sync = py(["scripts/jobs/sync_internship_tracker.py", JSON.stringify(row)]);
   const res = spawnSync(sync.cmd, sync.args, {
     cwd: root,
     encoding: "utf8",
@@ -93,7 +93,7 @@ export interface ValidatorResult {
 }
 
 export function runValidator(root: string): ValidatorResult {
-  const val = py(["scripts/validate_local_config.py"]);
+  const val = py(["scripts/validate/validate_local_config.py"]);
   const res = spawnSync(val.cmd, val.args, {
     cwd: root,
     encoding: "utf8",

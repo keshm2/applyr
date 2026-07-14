@@ -6,9 +6,9 @@ The helper is deterministic, stdlib-only, and returns a machine-readable JSON
 decision to stdout.
 
 Usage:
-  python3 scripts/evaluate_job_fit.py '<canonical-job-json>'
-  python3 scripts/evaluate_job_fit.py '<canonical-job-json>' --targets config/targets.json
-  python3 scripts/evaluate_job_fit.py -                      # read JSON from stdin
+  python3 scripts/jobs/evaluate_job_fit.py '<canonical-job-json>'
+  python3 scripts/jobs/evaluate_job_fit.py '<canonical-job-json>' --targets config/targets.json
+  python3 scripts/jobs/evaluate_job_fit.py -                      # read JSON from stdin
 
 Exit codes:
   0  successful evaluation (including skipped_unfit / needs_review / candidate)

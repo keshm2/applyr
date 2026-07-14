@@ -27,7 +27,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(PROJECT_ROOT)
 IS_WINDOWS = os.name == "nt"
 
@@ -149,7 +149,7 @@ def main() -> int:
         update_result = ""
         try:
             with open(run_log, "a", encoding="utf-8") as errfh:
-                p = py_run([os.path.join("scripts", "update.py"), "--auto"],
+                p = py_run([os.path.join("scripts", "install", "update.py"), "--auto"],
                            stdout=subprocess.PIPE, stderr=errfh, text=True)
             lines = [ln for ln in (p.stdout or "").splitlines() if ln.strip()]
             update_result = lines[-1] if lines else ""
@@ -254,22 +254,22 @@ def _count_skipped_unfit() -> int:
 
 def _run(logs_dir: str, run_log: str) -> int:
     # --- Config validation ---------------------------------------------------
-    if py_run([os.path.join("scripts", "validate_local_config.py"), PROJECT_ROOT]).returncode != 0:
+    if py_run([os.path.join("scripts", "validate", "validate_local_config.py"), PROJECT_ROOT]).returncode != 0:
         log(run_log, "ABORTED: local config validation failed. Run manually to fix.")
         return 1
 
     # --- Ensure persistent state files --------------------------------------
     for f in ("data/applied_jobs.json", "data/review_queue.json"):
-        if py_run([os.path.join("scripts", "append_state_entry.py"), "ensure", f]).returncode != 0:
+        if py_run([os.path.join("scripts", "state", "append_state_entry.py"), "ensure", f]).returncode != 0:
             log(run_log, f"ABORTED: failed to ensure {f}. Run manually to fix.")
             return 1
 
-    if py_run([os.path.join("scripts", "job_state.py"), "ensure-files"]).returncode != 0:
+    if py_run([os.path.join("scripts", "state", "job_state.py"), "ensure-files"]).returncode != 0:
         log(run_log, "ABORTED: failed to ensure canonical registry/event files. Run manually to fix.")
         return 1
 
-    if py_run([os.path.join("scripts", "generate_agent_definitions.py"), "--check"]).returncode != 0:
-        log(run_log, "WARNING: generated agent definitions are stale — run scripts/generate_agent_definitions.py")
+    if py_run([os.path.join("scripts", "validate", "generate_agent_definitions.py"), "--check"]).returncode != 0:
+        log(run_log, "WARNING: generated agent definitions are stale — run scripts/validate/generate_agent_definitions.py")
 
     # --- Harness selection ---------------------------------------------------
     harness = os.environ.get("APPLYR_HARNESS", os.environ.get("ARES_HARNESS", "")) or ""
@@ -379,7 +379,7 @@ def _run(logs_dir: str, run_log: str) -> int:
     d_failed = after["failed"] - before["failed"]
     d_skipped = after_skipped - before_skipped
 
-    py_run([os.path.join("scripts", "write_heartbeat.py"), "--exit-code", str(run_rc),
+    py_run([os.path.join("scripts", "runtime", "write_heartbeat.py"), "--exit-code", str(run_rc),
             "--applied", str(d_applied), "--needs-review", str(d_review),
             "--failed", str(d_failed), "--skipped-unfit", str(d_skipped)])
 

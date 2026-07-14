@@ -8,7 +8,7 @@ mode: subagent
 model: opencode-go/deepseek-v4-flash
 temperature: 0
 ---
-<!-- GENERATED from agents/bodies/discord-reporter.md + agents/frontmatter/opencode/discord-reporter.yaml — edit those sources and run scripts/generate_agent_definitions.py -->
+<!-- GENERATED from agents/bodies/discord-reporter.md + agents/frontmatter/opencode/discord-reporter.yaml — edit those sources and run scripts/validate/generate_agent_definitions.py -->
 
 You send Discord webhook messages. Read config/discord_config.json first:
 **Discord reporting is optional.** If the file is missing, or it has

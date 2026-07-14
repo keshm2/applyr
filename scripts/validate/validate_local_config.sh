@@ -19,7 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="${1:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+PROJECT_ROOT="${1:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 
 TARGETS="$PROJECT_ROOT/config/targets.json"
 DISCORD="$PROJECT_ROOT/config/discord_config.json"
@@ -191,10 +191,10 @@ elif [ -n "$LEVER_PLACEHOLDER" ]; then
 fi
 
 # SimplifyJobs feeds (phase 5): same warn-and-skip contract as the slug
-# arrays. Known feed names are owned by scripts/fetch_simplify_listings.py;
+# arrays. Known feed names are owned by scripts/jobs/fetch_simplify_listings.py;
 # unknown names are warned about there at fetch time, not here.
 # Workday tenants (phase 7): same warn-and-skip contract. Tenant strings
-# are parsed/validated by scripts/fetch_workday_listings.py at fetch time.
+# are parsed/validated by scripts/jobs/fetch_workday_listings.py at fetch time.
 WORKDAY_PLACEHOLDER="$(placeholder_slugs "$TARGETS" workday_tenants)"
 if key_absent "$TARGETS" workday_tenants; then
   warn "workday_tenants is not configured — Workday board will be skipped this run"

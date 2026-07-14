@@ -14,11 +14,11 @@ The per-harness agent definitions are **generated**; never edit
 Regenerate after editing any source:
 
 ```bash
-python3 scripts/generate_agent_definitions.py          # write
-python3 scripts/generate_agent_definitions.py --check  # drift check (CI / pre-run)
+python3 scripts/validate/generate_agent_definitions.py          # write
+python3 scripts/validate/generate_agent_definitions.py --check  # drift check (CI / pre-run)
 ```
 
-`scripts/run_job_agent.sh` runs the drift check at the start of every
+`scripts/runtime/run_job_agent.sh` runs the drift check at the start of every
 run and warns (does not block) when the generated files are stale.
 
 Harness capability contract (what a driver must provide): subagent
