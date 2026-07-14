@@ -15,7 +15,7 @@
 #      logs, and resumes (PII), so it is only deleted after an explicit
 #      confirmation (or --yes).
 #
-# npm installs: `npm uninstall -g @keshm2/applyr` removes the globally
+# npm installs: `npm uninstall -g @keshm/applyr` removes the globally
 # installed TUI command (this script prints a reminder when it detects
 # one). The npm package never owns the core directory — this script does.
 set -euo pipefail
@@ -61,8 +61,8 @@ main() {
 
   # npm-installed TUI reminder (the package never owns the core dir).
   if command -v npm >/dev/null 2>&1 \
-     && npm ls -g @keshm2/applyr >/dev/null 2>&1; then
-    say "npm package detected — also run: npm uninstall -g @keshm2/applyr"
+     && npm ls -g @keshm/applyr >/dev/null 2>&1; then
+    say "npm package detected — also run: npm uninstall -g @keshm/applyr"
   fi
 
   # 3. The install directory (config, data, logs, resumes — PII).

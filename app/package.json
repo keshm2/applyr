@@ -1,9 +1,8 @@
 {
-  "name": "@keshm2/applyr",
+  "name": "@keshm/applyr",
   "version": "0.7.9-alpha.0",
   "description": "Terminal UI overlay for applyr — manual job search, automatic runs, review triage, status, and history over the Python core. The unscoped npm name 'applyr' belongs to an unrelated package.",
   "publishConfig": {
-    "tag": "alpha",
     "access": "public"
   },
   "repository": {

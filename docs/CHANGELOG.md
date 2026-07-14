@@ -27,7 +27,7 @@ but trimmed to fit a small in-repo doc.
 
 ## [0.7.9a] — 2026-07-13
 
-npm package: `@keshm2/applyr` version `0.7.9-alpha.0` (alpha tag).
+npm package: `@keshm/applyr` version `0.7.9-alpha.0` (alpha tag).
 This is the first build clients receive via **automatic update** —
 pushing the `VERSION` bump to `main` rolls it out.
 
@@ -65,7 +65,7 @@ pushing the `VERSION` bump to `main` rolls it out.
   it holds config/data/resumes PII. `--keep-data` keeps the
   directory; `--yes` skips the prompt; non-interactive without
   `--yes` never deletes data. npm installs additionally run
-  `npm uninstall -g @keshm2/applyr`.
+  `npm uninstall -g @keshm/applyr`.
 
 - **Discord is now optional (opt-in at install).** The installer and
   `applyr setup` ask whether to use Discord for status updates; no
@@ -89,7 +89,7 @@ pushing the `VERSION` bump to `main` rolls it out.
 
 ## [0.7.8a] — 2026-07-12
 
-npm package: **`@keshm2/applyr` version `0.7.8-alpha.0`** (the
+npm package: **`@keshm/applyr` version `0.7.8-alpha.0`** (the
 unscoped npm name `applyr` belongs to an unrelated package; `0.7.8a`
 is the human-facing build marker, `0.7.8-alpha.0` its strict-semver
 form).

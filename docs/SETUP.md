@@ -24,7 +24,7 @@ bash scripts/install.sh
 
 # Or via npm (installs the `applyr` TUI command; on first run with no
 # core it offers to download the core for you):
-npm install -g @keshm2/applyr@alpha
+npm install -g @keshm/applyr
 ```
 
 **Automatic updates.** Every scheduled run and every `applyr` launch
@@ -63,7 +63,7 @@ whichever works behind your network.
 removes the launchd schedule and the `applyr` command, then asks
 before deleting the install directory (it holds your config, data,
 and resumes). `--keep-data` keeps the directory; `--yes` skips the
-prompt. npm installs also run `npm uninstall -g @keshm2/applyr`.
+prompt. npm installs also run `npm uninstall -g @keshm/applyr`.
 
 applyr runs under your choice of coding agent — all four majors are
 supported: **opencode**, **Claude Code** (full capability), **Codex

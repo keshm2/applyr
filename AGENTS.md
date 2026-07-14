@@ -30,7 +30,7 @@
   History/Status, AUTO cockpit with cap gauge + heartbeat counters +
   full-height log tail, randomized per-launch sidebar greeting,
   backspace fix: DEL 0x7f now erases backward in all text editors);
-  release 0.7.8a (2026-07-12 — npm package is **@keshm2/applyr**
+  release 0.7.8a (2026-07-12 — npm package is **@keshm/applyr**
   0.7.8-alpha.0, the unscoped `applyr` npm name is owned by an
   unrelated package; README banner + agent artwork in docs/assets/;
   npm publish pending `npm login`); one-command install +

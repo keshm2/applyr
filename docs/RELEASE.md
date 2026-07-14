@@ -4,7 +4,7 @@
 > **Branch:** `main`.
 > **TUI in-app marker:** `app/src/theme.ts` → `BUILD_MARKER = "0.7.9a"`
 > (visible in the TUI side-panel footer).
-> **npm package:** `@keshm2/applyr` version `0.7.9-alpha.0`, dist-tag
+> **npm package:** `@keshm/applyr` version `0.7.9-alpha.0`, dist-tag
 > `alpha`. The unscoped npm name `applyr` belongs to an unrelated
 > package — never `npm install applyr`. npm requires strict semver, so
 > `0.7.9a` is the human-facing marker and `0.7.9-alpha.0` its semver
@@ -35,7 +35,7 @@ stay current automatically, leave cleanly.
   `bash scripts/uninstall.sh`: removes the schedule and the PATH
   wrapper, then deletes the install directory only after explicit
   confirmation (`--keep-data` / `--yes` variants). npm installs also
-  run `npm uninstall -g @keshm2/applyr`.
+  run `npm uninstall -g @keshm/applyr`.
 - **Phase 16 — multi coding-agent support** — Codex CLI and GitHub
   Copilot CLI adapters, 4-agent installer detection, the harness
   capability matrix with mandatory degraded paths in `AGENTS.md`, and
@@ -66,7 +66,7 @@ or opencode (full capability), or Codex CLI / GitHub Copilot CLI
 curl -fsSL https://raw.githubusercontent.com/keshm2/ares/main/scripts/install.sh | bash
 
 # or via npm:
-npm install -g @keshm2/applyr@alpha
+npm install -g @keshm/applyr
 
 # update now (also happens automatically on runs and launches):
 applyr update
@@ -95,7 +95,7 @@ applyr uninstall          # add --keep-data to keep config/data/resumes
 
 - Git tag `0.7.9a` on `main` — GitHub's automatic source archives are
   the manual-install path.
-- npm: `@keshm2/applyr@0.7.9-alpha.0` under the `alpha` dist-tag
+- npm: `@keshm/applyr@0.7.9-alpha.0` under the `alpha` dist-tag
   (`cd app && npm publish` — publishConfig sets `access: public` and
   the tag). Publish requires `npm login`.
 - CI workflows (`.github/workflows/tui.yml`, `extension.yml`) run on
@@ -103,7 +103,7 @@ applyr uninstall          # add --keep-data to keep config/data/resumes
 
 ## Known gaps
 
-- npm publish of `@keshm2/applyr` awaits `npm login` on the
+- npm publish of `@keshm/applyr` awaits `npm login` on the
   maintainer's machine.
 - Codex / Copilot live conformance runs pending a machine with those
   CLIs (`python3 scripts/run_conformance.py --harness all`).

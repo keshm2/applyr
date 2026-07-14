@@ -62,9 +62,8 @@ PATH**. When it finishes, type `applyr` and you're in.
 Prefer npm? Same result:
 
 ```bash
-# The unscoped npm name "applyr" belongs to an unrelated package —
-# install the scoped one. The command it installs is still `applyr`.
-npm install -g @keshm2/applyr@alpha
+# Always installs the latest build.
+npm install -g @keshm/applyr
 applyr        # no core found → it offers to download it for you
 ```
 
@@ -105,7 +104,7 @@ schedule and command; `--yes` skips the confirmation. npm installs
 also run:
 
 ```bash
-npm uninstall -g @keshm2/applyr
+npm uninstall -g @keshm/applyr
 ```
 
 ## What applyr does
