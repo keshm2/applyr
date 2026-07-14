@@ -1,8 +1,8 @@
 <#
-install.ps1 — native Windows first-run installer (PowerShell).
+install.ps1 - native Windows first-run installer (PowerShell).
 
 One command from a fresh machine to a validated, harness-configured setup
-that runs natively on PowerShell and cmd.exe — no WSL, no bash, no jq.
+that runs natively on PowerShell and cmd.exe - no WSL, no bash, no jq.
 
   # one-liner (from anywhere):
   irm https://raw.githubusercontent.com/keshm2/ares/main/scripts/install.ps1 | iex
@@ -49,7 +49,7 @@ if ($scriptPath) {
 if (-not $projectRoot) {
   $target = if ($env:APPLYR_HOME) { $env:APPLYR_HOME } else { Join-Path $HOME "applyr" }
   if (Test-Path (Join-Path $target "AGENTS.md")) {
-    Say "existing install found at $target — re-running its installer."
+    Say "existing install found at $target - re-running its installer."
   } else {
     Say "downloading applyr into $target ..."
     New-Item -ItemType Directory -Force -Path $target | Out-Null
@@ -72,10 +72,10 @@ function Py { param([string[]]$a) & $py[0] @($py[1..($py.Length-1)] + $a) }
 
 # --- 2. Live configs from examples -------------------------------------------
 if (Test-Path "config\targets.json") {
-  Say "config/targets.json exists — keeping it."
+  Say "config/targets.json exists - keeping it."
 } else {
   Copy-Item "config\targets.example.json" "config\targets.json"
-  Say "created config/targets.json from the example — fill placeholders (or run 'applyr setup')."
+  Say "created config/targets.json from the example - fill placeholders (or run 'applyr setup')."
 }
 
 # --- 2b. Discord (optional, opt-in) ------------------------------------------
@@ -87,7 +87,7 @@ function Write-DisabledDiscord {
 }' | Set-Content -Encoding UTF8 $discordLive
 }
 if (Test-Path $discordLive) {
-  Say "$discordLive exists — keeping it."
+  Say "$discordLive exists - keeping it."
 } else {
   $optIn = Read-Host "Use Discord for status updates (applied / needs-review / failed / summary)? [y/N]"
   if ($optIn -eq "y" -or $optIn -eq "Y") {
@@ -108,7 +108,7 @@ if (Test-Path $discordLive) {
       $s = $all; $r = $all; $f = $all; $m = $all
     }
     if ([string]::IsNullOrWhiteSpace($s)) {
-      Warn "no webhook URL entered — writing Discord as disabled; enable later with 'applyr setup'."
+      Warn "no webhook URL entered - writing Discord as disabled; enable later with 'applyr setup'."
       Write-DisabledDiscord
     } else {
       $webhooks = [ordered]@{ success = $s; needs_review = $r; failed = $f }
@@ -118,7 +118,7 @@ if (Test-Path $discordLive) {
     }
   } else {
     Write-DisabledDiscord
-    Say "Discord skipped — outcomes stay local (state files + TUI). Enable any time with 'applyr setup'."
+    Say "Discord skipped - outcomes stay local (state files + TUI). Enable any time with 'applyr setup'."
   }
 }
 
@@ -139,7 +139,7 @@ if ($detected.Count -eq 0) {
   Warn "  https://developers.openai.com/codex/cli / https://docs.github.com/copilot"
 }
 if (Test-Path "config\harness.json") {
-  Say "config/harness.json exists — keeping it."
+  Say "config/harness.json exists - keeping it."
 } else {
   $harness = ""
   if ($detected.Count -gt 1) {
@@ -157,7 +157,7 @@ if (Test-Path "config\harness.json") {
     [ordered]@{ harness = $harness } | ConvertTo-Json | Set-Content -Encoding UTF8 "config\harness.json"
     Say "wrote config/harness.json (harness: $harness)."
   } else {
-    Say "skipped config/harness.json — no supported coding agent detected yet."
+    Say "skipped config/harness.json - no supported coding agent detected yet."
   }
 }
 
@@ -171,7 +171,7 @@ if ((-not $firstName) -or ($firstName -eq "REPLACE_ME")) {
   Write-Host "       It is written to gitignored files on this machine (config/, resumes/)" -ForegroundColor Cyan
   Write-Host "       and is never committed, uploaded, or shared." -ForegroundColor Cyan
   Write-Host ""
-  Write-Host "Your profile — used only to fill application forms (press enter to skip a field):"
+  Write-Host "Your profile - used only to fill application forms (press enter to skip a field):"
   $fields = @(
     @("first_name","First name"), @("last_name","Last name"), @("email","Email"),
     @("phone","Phone"), @("linkedin_url","LinkedIn URL"), @("github_url","GitHub URL"),
@@ -188,9 +188,9 @@ if ((-not $firstName) -or ($firstName -eq "REPLACE_ME")) {
   }
   if ($changed) {
     $targets | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 "config\targets.json"
-    Say "profile written to config/targets.json (gitignored — run 'applyr setup' to edit the rest)."
+    Say "profile written to config/targets.json (gitignored - run 'applyr setup' to edit the rest)."
   } else {
-    Say "profile skipped — run 'applyr setup' any time to fill it in."
+    Say "profile skipped - run 'applyr setup' any time to fill it in."
   }
 }
 New-Item -ItemType Directory -Force -Path "resumes" | Out-Null
@@ -198,7 +198,7 @@ Write-Host ""
 Write-Host "[docs] Resumes: drop ALL your resumes as PDFs into" -ForegroundColor Cyan
 Write-Host ("       " + (Join-Path $projectRoot "resumes")) -ForegroundColor Cyan
 Write-Host "       applyr scans them and converts each to markdown to tailor per job." -ForegroundColor Cyan
-Write-Host "       This folder is gitignored — local only." -ForegroundColor Cyan
+Write-Host "       This folder is gitignored - local only." -ForegroundColor Cyan
 Write-Host ""
 
 # --- 5. Claude Code headless permissions (opt-in) ----------------------------
@@ -225,7 +225,7 @@ if ((Get-Command claude -ErrorAction SilentlyContinue) -and -not (Test-Path ".cl
 '@ | Set-Content -Encoding UTF8 ".claude\settings.json"
     Say "wrote .claude/settings.json."
   } else {
-    Say "skipped .claude/settings.json — headless Claude runs will prompt for permissions."
+    Say "skipped .claude/settings.json - headless Claude runs will prompt for permissions."
   }
 }
 
@@ -237,7 +237,7 @@ Py @("scripts\validate_local_config.py")
 if ($LASTEXITCODE -eq 0) {
   Say "config valid."
 } else {
-  Warn "config not valid yet — edit the files named above (or run 'applyr setup'), then re-run the validator."
+  Warn "config not valid yet - edit the files named above (or run 'applyr setup'), then re-run the validator."
 }
 
 # --- 8. TUI / extension (optional) -------------------------------------------
@@ -254,14 +254,14 @@ function Build-NodeSurface {
   if ($LASTEXITCODE -eq 0) { & npm run build --silent }
   $ok = ($LASTEXITCODE -eq 0)
   Pop-Location
-  if ($ok) { Say "$Label ready." } else { Warn "$Label build failed — see docs/SETUP.md." }
+  if ($ok) { Say "$Label ready." } else { Warn "$Label build failed - see docs/SETUP.md." }
 }
 
 if (Get-Command npm -ErrorAction SilentlyContinue) {
   Build-NodeSurface "app" "the TUI"
   Build-NodeSurface "extension" "the browser extension"
 } else {
-  Say "node/npm not found — skipping the optional TUI and browser extension (docs/SETUP.md)."
+  Say "node/npm not found - skipping the optional TUI and browser extension (docs/SETUP.md)."
 }
 
 # --- 9. `applyr` command on PATH ---------------------------------------------
@@ -274,16 +274,16 @@ if ((Test-Path $cliJs) -and (Get-Command node -ErrorAction SilentlyContinue)) {
 
   $foreign = (Test-Path $cmdShim) -and -not ((Get-Content $cmdShim -Raw -ErrorAction SilentlyContinue) -match "applyr wrapper")
   if ($foreign) {
-    Warn "$cmdShim exists and is not applyr's wrapper — leaving it alone."
+    Warn "$cmdShim exists and is not applyr's wrapper - leaving it alone."
   } else {
     @"
 @echo off
-REM applyr wrapper — generated by scripts/install.ps1; safe to delete.
+REM applyr wrapper - generated by scripts/install.ps1; safe to delete.
 if not defined APPLYR_ROOT set "APPLYR_ROOT=$projectRoot"
 node "$projectRoot\app\dist\cli.js" %*
 "@ | Set-Content -Encoding ASCII $cmdShim
     @"
-# applyr wrapper — generated by scripts/install.ps1; safe to delete.
+# applyr wrapper - generated by scripts/install.ps1; safe to delete.
 if (-not `$env:APPLYR_ROOT) { `$env:APPLYR_ROOT = "$projectRoot" }
 node "$projectRoot\app\dist\cli.js" @args
 "@ | Set-Content -Encoding UTF8 $ps1Shim
@@ -292,7 +292,7 @@ node "$projectRoot\app\dist\cli.js" @args
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if (($userPath -split ";") -notcontains $binDir) {
       [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(";") + ";" + $binDir), "User")
-      Warn "added $binDir to your user PATH — open a NEW terminal for `applyr` to resolve."
+      Warn "added $binDir to your user PATH - open a NEW terminal for `applyr` to resolve."
     }
   }
 }
