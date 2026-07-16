@@ -17,6 +17,9 @@ import {
   writeTargetsBool,
 } from "../settings.js";
 import { readProfileUsername, writeProfileUsername } from "../profileLinks.js";
+import { openPath } from "../helpers.js";
+import { resumesDir } from "../resumes.js";
+import { detectHarnessOnPath } from "../harness.js";
 import { readCommittedCompanyDisplays, writeCommittedCompanyDisplays } from "../companyTargets.js";
 import { loadCompanyDirectory, companyWeight, type CompanyEntry } from "../data/companyDirectory.js";
 import { US_CITIES } from "../data/usCities.js";
@@ -88,7 +91,11 @@ interface Field {
     | "personal-link"
     | "company-autocomplete"
     | "location-autocomplete"
-    | "checklist";
+    | "checklist"
+    /** Fires a side effect on Enter instead of editing a value (e.g. open
+     *  the resumes folder in the OS file manager). Has no stored value, so
+     *  it renders without one. */
+    | "action";
   /** Default shown for env fields when neither env nor config set it. */
   fallback?: string;
   /** Present on an "env" field to edit it as a fixed choice menu (arrow
@@ -132,6 +139,7 @@ const SECTIONS: Section[] = [
       { kind: "personal", key: "zip_code", label: "Zip code", explain: "Home zip code used on applications." },
       { kind: "personal", key: "address_line1", label: "Address line 1", explain: "Street address used on applications." },
       { kind: "personal", key: "address_line2", label: "Address line 2", explain: "Apartment/unit — optional, used on applications." },
+      { kind: "personal", key: "gender", label: "Gender", explain: "Optional EEO demographic question many applications ask. Leave empty to decline — applyr never invents an answer for a field you left blank." },
       { kind: "personal", key: "ethnicity", label: "Ethnicity", explain: "Optional EEO demographic question some applications ask." },
       { kind: "personal", key: "hispanic_or_latino", label: "Hispanic/Latino", explain: "Optional EEO demographic question some applications ask." },
       { kind: "personal", key: "date_of_birth", label: "Date of birth", explain: "Only used where an application form explicitly requires it." },
@@ -173,6 +181,20 @@ const SECTIONS: Section[] = [
         label: "Workday tenants",
         explain: "Workday tenant identifiers to scrape in review-only mode. Editing here isn't supported yet — Workday has no company-search API like Ashby/Lever/Greenhouse; edit config/targets.json by hand for now.",
         disabled: "not editable here yet — edit config/targets.json by hand",
+      },
+    ],
+  },
+  {
+    name: "Resumes",
+    description:
+      "Where applyr reads your resume PDFs from. Drop files into the folder, then convert them to markdown from the Resumes tab.",
+    fields: [
+      {
+        kind: "action",
+        key: "open_resumes_folder",
+        label: "Open resumes folder",
+        explain:
+          "Opens the resumes folder in Finder / File Explorer / your Linux file manager so you can drag resume PDFs straight in — no need to find the path yourself. The folder is created if it doesn't exist yet.",
       },
     ],
   },
@@ -229,6 +251,10 @@ const SECTIONS: Section[] = [
 
 function currentValue(root: string, field: Field, directory?: CompanyEntry[]): { value: string; note: string } {
   switch (field.kind) {
+    // An action has no stored value — the row is a button, so the value
+    // column shows where it will take you rather than "(not set)".
+    case "action":
+      return { value: field.key === "open_resumes_folder" ? resumesDir(root) : "", note: "" };
     case "personal": {
       const v = readSafeField(root, field.key);
       return { value: v || "(not set)", note: "" };
@@ -258,11 +284,27 @@ function currentValue(root: string, field: Field, directory?: CompanyEntry[]): {
       const eff = effectiveEnv(root, field.key, field.fallback ?? "");
       if (field.options) {
         const match = field.options.find((o) => o.value === eff.value);
-        return { value: match?.label ?? eff.value ?? "(not set)", note: eff.origin };
+        return { value: match ? optionLabel(field, match) : eff.value || "(not set)", note: eff.origin };
       }
       return { value: eff.value || "(not set)", note: eff.origin };
     }
   }
+}
+
+/**
+ * Display label for a fixed-choice option. Everything renders as authored
+ * except the Coding agent's "Auto" row, which names the agent it actually
+ * resolves to right now — a bare "Auto" told the user nothing about which
+ * of the four would drive the run, which was the whole question they were
+ * asking the row. Resolved live (a few stat calls) so installing an agent
+ * is reflected without restarting the TUI.
+ */
+function optionLabel(field: Field, option: { label: string; value: string }): string {
+  if (field.key !== "APPLYR_HARNESS" || option.value !== "") return option.label;
+  const detected = detectHarnessOnPath();
+  if (!detected) return "Auto (no coding agent found on PATH)";
+  const name = field.options?.find((o) => o.value === detected)?.label ?? detected;
+  return `Auto (detected and using ${name})`;
 }
 
 /** Plain single-value text fields (personal info, Discord webhook URLs,
@@ -703,6 +745,17 @@ export function SettingsScreen({
             setMessage(field.disabled);
             return;
           }
+          if (field.kind === "action" && field.key === "open_resumes_folder") {
+            // openPath creates the directory first, so a fresh install with
+            // no resumes yet still opens cleanly rather than erroring.
+            try {
+              openPath(resumesDir(root));
+              setMessage(`Opened ${resumesDir(root)} — drag your resume PDFs in, then use the Resumes tab to convert them.`);
+            } catch (err) {
+              setMessage(`Could not open the resumes folder: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            return;
+          }
           if (field.kind === "discord-enabled") {
             const next = !readDiscordEnabled(root);
             writeDiscordEnabled(root, next);
@@ -870,13 +923,13 @@ export function SettingsScreen({
                 ? field.options.map((o, i) => (
                     <OptionRow
                       key={o.value}
-                      label={o.label}
+                      label={optionLabel(field, o)}
                       focused={i === optionCursor}
                       checked={o.value === currentOptionValue}
                       preview={
                         o.harness && i === optionCursor ? (
                           <AutoSparkleText gradient={harnessGradient(o.harness)} tickMs={HARNESS_WAVE_TICK_MS} offsetStep={HARNESS_WAVE_STEP}>
-                            {o.label}
+                            {optionLabel(field, o)}
                           </AutoSparkleText>
                         ) : undefined
                       }

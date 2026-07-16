@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
-import { latestSessionLog, readHeartbeat } from "../state.js";
-import { py, stopProcessTree } from "../platform.js";
+import { activeRunPid, latestSessionLog, readHeartbeat } from "../state.js";
+import { py, stopPid, stopProcessTree } from "../platform.js";
 import { theme, statusGlyph, capTier, harnessGradient, HARNESS_WAVE_TICK_MS, HARNESS_WAVE_STEP } from "../theme.js";
 import { resolveHarnessId } from "../harness.js";
 import { RainbowText, AutoSparkleText, SpinnerGlyph, GradientProgressBar, KeyHints } from "./KeyHints.js";
@@ -16,7 +16,9 @@ import {
 } from "./TextInput.js";
 
 // Keep a deep buffer; how many lines actually render is derived from the
-// live terminal height so the log fills the content region.
+// live terminal height so the log fills the content region. This bound is
+// for *display* only — progress parsing must never read from it, see
+// markersIn/applyProgress below.
 const TAIL_BUFFER = 200;
 const GAUGE_WIDTH = 14;
 const PROMPT_MAX = 500;
@@ -36,20 +38,30 @@ interface ChecklistSlotDef {
 
 /**
  * Recognizable phase-name substrings mapped to the 5 checklist slots the
- * running view shows. Matches the exact marker lines specified in
+ * running view shows. Matches the marker lines specified in
  * agents/bodies/job-scraper.md's "Progress markers" section
  * (`[ ]`/`[•]`/`[✓]` + a phase name) but is deliberately loose on the
  * text match — this is best-effort cosmetic sugar, not a general
  * log-format parser, so an older or hand-edited agent body still degrades
  * to the generic "running…" indicator instead of showing garbage.
+ *
+ * Match on verb STEMS, never the full infinitive: every marker the agent
+ * actually emits is a present participle ("Scraping job boards",
+ * "Filtering + fit-gating"), so /scrape/ and /fit.?gate/ — the original
+ * patterns — could never match their own markers, because the participle
+ * drops the trailing "e" ("scrap-ing", "fit-gat-ing"). Those two slots sat
+ * permanently on "pending", and during the scrape phase (the longest phase
+ * of a run) nothing matched at all, so the whole checklist collapsed to
+ * null and the screen showed a bare "run in progress…". Any new slot added
+ * here must be verified against the literal text in the agent body.
  */
 const CHECKLIST_SLOTS: ChecklistSlotDef[] = [
-  { key: "scrape", label: "Scrape", caption: "Scraping job boards", match: /scrape|fetch/i },
+  { key: "scrape", label: "Scrape", caption: "Scraping job boards", match: /scrap|fetch/i },
   {
     key: "fitgate",
     label: "Fit-gate",
     caption: "Filtering + fit-gating",
-    match: /fit.?gate|prefilter|role filter/i,
+    match: /fit.?gat|prefilter|role filter/i,
   },
   { key: "tailor", label: "Tailor", caption: "Tailoring resume", match: /tailor/i },
   { key: "apply", label: "Apply", caption: "Applying to jobs", match: /\bapply(ing)?\b/i },
@@ -76,7 +88,7 @@ interface PhaseInfo {
  * falls through to `null`, and the caller shows a generic "running…"
  * indicator instead of guessing at garbage.
  */
-function parsePhaseChecklist(lines: string[]): PhaseInfo | null {
+export function parsePhaseChecklist(lines: string[]): PhaseInfo | null {
   try {
     const state: Record<ChecklistKey, SlotState> = {
       scrape: "pending",
@@ -120,6 +132,18 @@ function parsePhaseChecklist(lines: string[]): PhaseInfo | null {
 
 const APPLY_MARKER = /^\[apply\]\s*(.+?)\s*@\s*(.+)$/;
 
+/** Strip SGR color codes so the marker regexes match the agent's plain
+ *  text regardless of how the harness colorized the line. */
+const stripAnsi = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "").trim();
+
+/** The only lines the progress parsers care about. Retaining just these
+ *  (rather than the whole transcript) keeps a full run's progress state
+ *  bounded to a handful of lines however long the transcript grows. */
+const MARKER_LINE = /^\[( |•|✓|apply)\]/;
+
+/** Reduce raw output to the cleaned marker lines worth keeping. */
+export const markersIn = (raw: string[]) => raw.map(stripAnsi).filter((l) => MARKER_LINE.test(l));
+
 /**
  * Finds the most recent `[apply] <title> @ <company>` marker (see
  * agents/bodies/job-scraper.md's "Progress markers" section) so the
@@ -129,7 +153,7 @@ const APPLY_MARKER = /^\[apply\]\s*(.+?)\s*@\s*(.+)$/;
  * current one" because that phase's own state (from parsePhaseChecklist)
  * takes over the caption instead.
  */
-function parseCurrentApplication(lines: string[]): { title: string; company: string } | null {
+export function parseCurrentApplication(lines: string[]): { title: string; company: string } | null {
   for (let i = lines.length - 1; i >= 0; i--) {
     const raw = lines[i];
     if (!raw) continue;
@@ -195,12 +219,40 @@ export function RunScreen({
   const [confirmStop, setConfirmStop] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [pendingRestart, setPendingRestart] = useState<{ cap: number; prompt: string } | null>(null);
+  // Progress is accumulated across the whole run rather than re-derived per
+  // render from `lines` — see applyProgress for why that distinction is
+  // load-bearing.
+  const [progress, setProgress] = useState<PhaseInfo | null>(null);
+  const [applyTarget, setApplyTarget] = useState<{ title: string; company: string } | null>(null);
+  const markerLines = useRef<string[]>([]);
+  // A run in flight that this screen did not spawn: a scheduler tick, or a
+  // run left alive after the user quit the TUI with `q`. Adopted so `x` can
+  // stop it too — otherwise the only way to end one is to hunt the PID.
+  const [foreignPid, setForeignPid] = useState<number | undefined>(undefined);
   const child = useRef<ChildProcess | null>(null);
   const logBefore = useRef<string | undefined>(undefined);
   // Set right before we kill the child ourselves, so its `close` handler
   // can tell a user-requested stop apart from the harness exiting on its
   // own — a stop is neither success nor failure and gets its own phase.
   const stoppedByUser = useRef(false);
+
+  // Adopt any run this screen didn't spawn by reading the runner's own lock
+  // pid file. Two ways that happens: the 30-minute scheduler fired, or the
+  // user quit the TUI with `q` mid-run (which deliberately leaves the run
+  // going). Without this the screen shows "No run in progress" while one is
+  // very much in progress, and the only way to stop it is to find the PID by
+  // hand. Skipped while our own run is live — `phase` already tracks that,
+  // and the lock would just report our own runner back to us.
+  useEffect(() => {
+    if (phase === "running" || phase === "stopping") {
+      setForeignPid(undefined);
+      return;
+    }
+    const check = () => setForeignPid(activeRunPid(root));
+    check();
+    const timer = setInterval(check, 2000);
+    return () => clearInterval(timer);
+  }, [phase, root]);
 
   // Elapsed-run clock — ticks only while a run is live.
   useEffect(() => {
@@ -225,6 +277,28 @@ export function RunScreen({
     onRunningChange(phase === "running" || phase === "stopping");
     return () => onRunningChange(false);
   }, [onRunningChange, phase]);
+
+  /**
+   * Recompute the phase checklist and apply-target from every marker the
+   * run has emitted so far.
+   *
+   * This deliberately does NOT read `lines`. That array is capped at
+   * TAIL_BUFFER for display, and on a real run an early phase's marker
+   * scrolls out of it long before the run ends (a recent 794-line session
+   * log emitted `[✓] Scraping job boards` at line 428 — 166 lines past the
+   * cutoff by the time the run finished). Re-deriving the whole checklist
+   * from that window silently reverted completed slots to "pending", and
+   * once the live `[•]` marker scrolled out too, currentIndex fell back to
+   * the first pending slot — so the screen reported "Scraping job boards
+   * (phase 1 of 5)" while the agent was actually applying, and the
+   * apply-target line (gated on currentKey === "apply") disappeared at the
+   * same moment. Progress state must be sticky; only the log view truncates.
+   */
+  const applyProgress = (markers: string[]) => {
+    markerLines.current = markers;
+    setProgress(parsePhaseChecklist(markers));
+    setApplyTarget(parseCurrentApplication(markers));
+  };
 
   const commitCount = (): number | null => {
     if (!countInput) {
@@ -268,6 +342,7 @@ export function RunScreen({
     setInputMessage("");
     logBefore.current = latestSessionLog(root);
     setLines([]);
+    applyProgress([]);
     setExitCode(null);
     setStartedAt(Date.now());
     setElapsed(0);
@@ -288,8 +363,12 @@ export function RunScreen({
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.current = proc;
-    const push = (chunk: Buffer) =>
-      setLines((prev) => [...prev, ...chunk.toString().split("\n").filter(Boolean)].slice(-TAIL_BUFFER));
+    const push = (chunk: Buffer) => {
+      const incoming = chunk.toString().split("\n").filter(Boolean);
+      // Markers accumulate; only the display tail is bounded.
+      applyProgress([...markerLines.current, ...markersIn(incoming)]);
+      setLines((prev) => [...prev, ...incoming].slice(-TAIL_BUFFER));
+    };
     proc.stdout?.on("data", push);
     proc.stderr?.on("data", push);
     proc.on("error", (err) => {
@@ -310,6 +389,7 @@ export function RunScreen({
       if (finalLog && fs.existsSync(finalLog)) {
         try {
           const content = fs.readFileSync(finalLog, "utf8").trimEnd().split("\n");
+          applyProgress(markersIn(content));
           setLines(content.slice(-TAIL_BUFFER));
         } catch {
           /* transient read race — the poll below already stopped mattering */
@@ -351,6 +431,9 @@ export function RunScreen({
       if (current && current !== logBefore.current && fs.existsSync(current)) {
         try {
           const content = fs.readFileSync(current, "utf8").trimEnd().split("\n");
+          // The session log is the superset of what `push` saw, so replacing
+          // (not appending) the marker set here can't drop or double-count.
+          applyProgress(markersIn(content));
           setLines(content.slice(-TAIL_BUFFER));
         } catch {
           /* transient read race — next tick */
@@ -500,6 +583,34 @@ export function RunScreen({
         return;
       }
       if (phase === "stopping") return;
+      // A run we didn't spawn is still stoppable from here — same two-step
+      // x/x confirmation as our own, just signalled by PID instead of
+      // through a ChildProcess handle.
+      if (foreignPid !== undefined) {
+        if (confirmStop) {
+          if (input === "x") {
+            setConfirmStop(false);
+            stopPid(foreignPid);
+            setInputMessage(`⏹ stop signal sent to run ${foreignPid}.`);
+            setForeignPid(undefined);
+          } else if (key.escape) {
+            setConfirmStop(false);
+            setInputMessage("");
+          }
+          return;
+        }
+        if (input === "x") {
+          setConfirmStop(true);
+          setInputMessage("");
+          return;
+        }
+        if (input === "s") {
+          // The runner is single-flight: starting now would just log
+          // skipped_overlap and exit 0, which reads as a silent no-op.
+          setInputMessage(`A run is already in progress (pid ${foreignPid}) — press x to stop it first.`);
+          return;
+        }
+      }
       if (input === "e") {
         setEditingCount(true);
         setSessionCap(null);
@@ -550,7 +661,7 @@ export function RunScreen({
 
   const isLive = phase === "running" || phase === "stopping";
   const showCockpit = !isLive;
-  const phaseInfo = isLive ? parsePhaseChecklist(lines) : null;
+  const phaseInfo = isLive ? progress : null;
   const doneCount = phaseInfo ? phaseInfo.slots.filter((s) => s.state === "done").length : 0;
   const allDone = phaseInfo ? doneCount === phaseInfo.slots.length : false;
   const progressRatio = phaseInfo
@@ -561,8 +672,7 @@ export function RunScreen({
   // Only meaningful while the apply phase is actually current — once the
   // run moves on to Report, the last apply-marker is stale and showing it
   // would misleadingly suggest that job is still in progress.
-  const currentApplication =
-    isLive && phaseInfo?.currentKey === "apply" ? parseCurrentApplication(lines) : null;
+  const currentApplication = isLive && phaseInfo?.currentKey === "apply" ? applyTarget : null;
 
   return (
     <Box flexDirection="column">
@@ -664,7 +774,22 @@ export function RunScreen({
       </Box>
 
       <Box flexDirection="column" marginTop={1}>
-        {phase === "idle" ? (
+        {phase === "idle" && foreignPid !== undefined ? (
+          <Box flexDirection="column">
+            <Text color={theme.warn}>
+              <SpinnerGlyph color={theme.warn} /> A run is in progress (pid {foreignPid}) — started by the
+              scheduler, or left running when the TUI was last quit.
+            </Text>
+            <Text dimColor>Its progress isn't streamed here, but you can stop it.</Text>
+            <Box marginTop={1}>
+              {confirmStop ? (
+                <KeyHints hints="x confirm stop · esc cancel" />
+              ) : (
+                <KeyHints hints="x stop this run" />
+              )}
+            </Box>
+          </Box>
+        ) : phase === "idle" ? (
           <Box flexDirection="column">
             <Text dimColor>{statusGlyph.needs_review} No run in progress.</Text>
             <Box marginTop={1} flexDirection="column">
@@ -787,4 +912,8 @@ export function RunScreen({
 }
 
 export const RUN_HINTS = "e cap · p prompt · s start";
+// While a run is live e/p/s are all dead keys — the hint bar must advertise
+// what actually works, or `x` stays undiscoverable and `q` (which leaves the
+// run going) looks like the only way out.
+export const RUN_LIVE_HINTS = "x stop this run · c stop & correct · l log";
 export const RUN_EDIT_HINTS = "type · ←→ move · backspace erase · enter set · esc done";

@@ -30,3 +30,53 @@ export function resolveHarnessId(root: string): HarnessId {
   if (isKnown(fromConfig)) return fromConfig;
   return "auto";
 }
+
+/**
+ * PATH probe order — must stay identical to `run_job_agent.py`'s own
+ * auto-detect loop ("Harness selection"), or the UI will name a different
+ * agent than the one that actually drives the run.
+ */
+const DETECT_ORDER = ["opencode", "claude", "codex", "copilot"] as const;
+
+function onPath(cmd: string): boolean {
+  const dirs = (process.env["PATH"] ?? "").split(path.delimiter).filter(Boolean);
+  // Windows resolves a bare name through PATHEXT; POSIX wants the exec bit.
+  const exts =
+    process.platform === "win32"
+      ? (process.env["PATHEXT"] ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean)
+      : [""];
+  for (const dir of dirs) {
+    for (const ext of exts) {
+      const candidate = path.join(dir, cmd + ext);
+      try {
+        if (process.platform === "win32") {
+          if (fs.statSync(candidate).isFile()) return true;
+        } else {
+          fs.accessSync(candidate, fs.constants.X_OK);
+          return true;
+        }
+      } catch {
+        /* not here — keep looking */
+      }
+    }
+  }
+  return false;
+}
+
+/** Which agent "Auto" would actually pick right now, or undefined when
+ *  none of the four is installed. Cheap enough to call per render (a
+ *  handful of stat calls), and never cached — installing an agent while
+ *  the TUI is open should be reflected without a restart. */
+export function detectHarnessOnPath(): Exclude<HarnessId, "auto"> | undefined {
+  for (const candidate of DETECT_ORDER) {
+    if (onPath(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/** The agent a run would use right now: an explicit choice if set,
+ *  otherwise whatever auto-detect finds. */
+export function effectiveHarness(root: string): Exclude<HarnessId, "auto"> | undefined {
+  const resolved = resolveHarnessId(root);
+  return resolved === "auto" ? detectHarnessOnPath() : resolved;
+}

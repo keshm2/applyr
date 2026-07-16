@@ -7,6 +7,55 @@ but trimmed to fit a small in-repo doc.
 > Per-`docs/RELEASE.md` is the canonical, deep-dive release
 > document for each tagged build. This file is the index.
 
+## [0.9.1a] — 2026-07-16
+
+npm package: `@keshm/applyr` version `0.9.1-alpha.0`.
+
+### Security
+
+- **A real home address shipped as a placeholder** in
+  `app/src/ui/onboarding/pages.ts` and reached both GitHub and npm
+  (0.9.0-alpha.0/.1/.2). Purged from source and from git history
+  (`main` rewritten, tag `v0.9.0a` moved). **The affected npm tarballs are
+  still published** — unpublish them and use 0.9.1a. Placeholders must never
+  contain real data: this file is committed and compiled into the package.
+
+### Added
+
+- **Interest letters (Letters tab).** When an application asks "Why do you
+  want to work here?", applyr no longer invents an answer: it parks the job
+  and carries on. Write your own answer, or press `g` to have the new
+  `@interest-letter` agent draft one grounded strictly in your resume and
+  the JD — you edit and approve before anything is submitted. Approving is
+  what lets the next run apply. New `scripts/state/interest_letter.py` store
+  and `scripts/runtime/generate_interest_letter.py`.
+- `gender` in setup/Settings, an `email` field, a graduation-date step, and
+  a Settings action that opens the resumes folder on any OS.
+- Coding-agent row now reads "Auto (detected and using <agent>)".
+
+### Fixed
+
+- **Setup discarded what you typed** unless you pressed Enter — tabbing away
+  from target roles/companies silently lost them.
+- Fresh installs no longer prefill template junk (`your.email@example.com`,
+  `City, ST`) into the wizard, and no longer preload preferred locations.
+- Date of birth auto-inserts `/` and refuses impossible dates as you type.
+- Location autocomplete no longer silently swaps a typed city for a fuzzy
+  match; ~150 metro suburbs added.
+- **Search missed real postings**: "software engineering intern" now matches
+  "Software Engineer Intern". Preferred locations sort to the first page.
+- **The live-run screen misreported the phase** (and could claim "Scraping"
+  during an apply); `x` now also stops runs the TUI didn't start.
+- Dropdowns are selected by exact match only, with a mandatory pre-submit
+  form check — typing "Seattle" could previously commit "Settle".
+
+### Changed
+
+- Harness-specific argv now lives only in
+  `scripts/runtime/harness_adapter.py`; both the runner and the
+  interest-letter generator use it, so all four coding agents stay in sync.
+- `MIN_COLUMNS` 54 → 76 (the 7-tab row must not wrap).
+
 ## [0.9.0a] — 2026-07-15
 
 npm package: `@keshm/applyr` version `0.9.0-alpha.0`. Full notes:

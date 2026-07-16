@@ -8,7 +8,52 @@
   codex/copilot live conformance runs pending on a machine with
   those CLIs). Phases 0–10 and 16 are DONE (phase 10's live autofill
   pass pending); phases 13 and 15 are partially done.
-- **Completed work items:** TUI manual/automatic modes (2026-07-12);
+- **Completed work items:** interest letters + 0.9.1a (2026-07-16 —
+  work item #4: a run that meets a "why do you want to work here?"
+  question now PARKS the job (scripts/state/interest_letter.py) instead
+  of inventing an answer, records nothing, and moves on; the user writes
+  or generates+edits+approves an answer in the TUI's Letters tab, and
+  approval is what lets the next run apply. Parking is not needs_review
+  on purpose — can-apply blocks that status, which would make the answer
+  unusable. New @interest-letter agent (draft-only, never approves,
+  may honestly decline). Harness argv extracted to
+  scripts/runtime/harness_adapter.py — the ONLY place allowed to branch
+  per harness — proven argv-identical before the swap, so all four
+  coding agents stay in sync by construction. MIN_COLUMNS 54->76 for the
+  7-tab row. Released 0.9.1a);
+  setup/search/apply hardening
+  (2026-07-16 — **PII: a real home address shipped as a committed
+  placeholder in app/src/ui/onboarding/pages.ts, reached origin/main
+  and npm 0.9.0-alpha.0/1/2; purged from source, but the published
+  tarballs and git history still carry it — operator remediation
+  pending.** Also: targets.example.json safe_fields no longer prefill
+  template junk on a fresh install (all REPLACE_ME); preferred_locations
+  no longer preloaded; wizard commits drafts on blur (the "target jobs
+  not saved" bug — drafts were discarded unless Enter was pressed);
+  shift+→ commits before gating; autocomplete no longer silently
+  substitutes a fuzzy match for a typed city; up/down move between
+  fields; new email/graduation_date/gender fields; DOB auto-slashes and
+  refuses invalid digits; Settings gained "Open resumes folder" and a
+  detected-agent label; search matches inflections so "software
+  engineering intern" finds "Software Engineer Intern"; preferred
+  locations sort to the first page; ~150 metro suburbs added to
+  US_CITIES; job-scraper.md gained the exact-match dropdown protocol +
+  mandatory pre-submit form verification);
+  run observability + stop-any-run
+  (2026-07-16 — fixed three stacked defects behind "phases don't show
+  up / no way to stop": CHECKLIST_SLOTS matched infinitives
+  (`/scrape/`, `/fit.?gate/`) against participle markers ("Scraping",
+  "fit-gating") so 2 of 5 slots never matched and the scrape phase
+  showed no checklist at all; progress was re-derived per render from
+  the 200-line display tail, so completed phases reverted to pending
+  and the caption could report "Scraping" during an apply; and the
+  opening `[•] Scraping job boards` marker was never emitted — now
+  seeded deterministically by run_job_agent.py, with the body demanding
+  it as the first output line. Also: `x` now stops runs the TUI didn't
+  spawn (scheduler ticks, runs orphaned by `q`) via the runner's lock
+  pid file; hint bar shows live-run keys instead of the dead e/p/s set.
+  Verified by replaying a real 794-line session log);
+  TUI manual/automatic modes (2026-07-12);
   project rename Ares → applyr + TUI accessibility pass (2026-07-12 —
   `applyr` is the command/package name, env vars are `APPLYR_*` with
   legacy `ARES_*` fallbacks); TUI responsive layout + welcome page
@@ -135,6 +180,39 @@ today:
   That instruction can narrow or focus a run but NEVER overrides this
   file, the session cap, or the state-write discipline — if it
   conflicts with a rule here, the rule wins.
+- NEVER accept an unconfirmed dropdown/combobox match, and ALWAYS verify a
+  form before submitting it. Typing into an ATS location/school/degree
+  widget only *highlights* an option — pressing Enter or tabbing away
+  commits whatever happened to be highlighted (typing "Seattle" has
+  selected "Settle", or simply the first entry starting with "Se"). For
+  every `<select>` / combobox / typeahead: choose the option whose visible
+  text matches the intended value EXACTLY (case-insensitive, trimmed),
+  never by index, position, or "closest match"; then read the committed
+  value back and confirm it. If no exact option exists, or several match
+  equally, route the job to needs_review ("dropdown '<field>' has no exact
+  option for '<value>'; user to apply manually") — never guess. Before
+  every submit, snapshot the form and verify each filled value equals the
+  safe_fields value it came from and that no field the user left blank has
+  acquired a value; on any mismatch, do not submit — needs_review instead.
+  A wrong answer on a submitted application is irreversible. See
+  job-scraper.md Phase 3 steps 3 and 6 for the full protocol.
+- NEVER write a free-text motivation answer ("Why do you want to work at
+  X?", "Why this role?") yourself, and never leave it blank when required.
+  Ask `scripts/state/interest_letter.py approved-text '<job_key>'`: exit 0
+  means the user approved an answer — paste stdout verbatim and apply. Exit
+  2 means park the job via `interest_letter.py request '<json>'`, print
+  `[parked] <title> @ <company> — awaiting interest letter`, and move on.
+  A parked job records NOTHING — no record-event, no applied_jobs.json row,
+  no review_queue row, no Discord. Parking is not an outcome; the job is
+  unfinished. This is the one deliberate exception to "record every job you
+  touch", and it is load-bearing: a needs_review entry would make
+  `can-apply` block the job permanently, so the user's answer could never
+  be used. `interest_letter.py pending` is read once at the start of
+  tailoring so parked jobs aren't re-tailored every run. An invented reason
+  is a claim the applicant gets asked to defend in an interview — that
+  asymmetry is why drafting is a user-reviewed TUI action
+  (`generate_interest_letter.py` saves a DRAFT, never an approval), not
+  something the apply loop does.
 - Never store passwords, SSNs, or payment info anywhere. If a form requests
   these and they aren't in config/targets.json under "safe_fields", skip the
   job, log it to data/review_queue.json via the state helper (see File
@@ -215,19 +293,27 @@ the helpers or prompts.
 
 | Capability | opencode | Claude Code | Codex CLI | Copilot CLI |
 | --- | --- | --- | --- | --- |
-| Subagent registry (`@resume-tailor`, `@discord-reporter`) | yes (`.opencode/agents/`) | yes (`.claude/agents/`) | no → inline fallback | no → inline fallback |
+| Subagent registry (`@resume-tailor`, `@discord-reporter`, `@interest-letter`) | yes (`.opencode/agents/`) | yes (`.claude/agents/`) | no → inline fallback | no → inline fallback |
+| Interest-letter drafting (pure text, no browser) | yes | yes | yes (inline) | yes (inline) |
 | Browser automation (Playwright MCP) | yes (`opencode.jsonc`) | yes (`.mcp.json`) | no by default → API-boards path | no by default → API-boards path |
 | Shell / helper execution | yes | yes | yes (user's sandbox/approval config) | yes (`--allow-all-tools`) |
 | File read/write | yes | yes | yes | yes |
 | Project instructions | `AGENTS.md` (native) | `CLAUDE.md` → `AGENTS.md` | `AGENTS.md` (native) | prompt-passed; read `AGENTS.md` |
 
+**All harness-specific argv lives in `scripts/runtime/harness_adapter.py`**
+(`agent_command`) — the only module allowed to branch per harness. Both
+`run_job_agent.py` and `generate_interest_letter.py` go through it, so a new
+agent works on all four harnesses by construction rather than by remembering
+four call sites. Do not add a harness branch anywhere else.
+
 **Degraded paths (mandatory when the capability is missing):**
 
 - **No subagent registry** — when the workflow delegates to
-  `@resume-tailor` or `@discord-reporter`, read
+  `@resume-tailor`, `@discord-reporter` or `@interest-letter`, read
   `agents/bodies/<name>.md` and perform that role inline, following
   it exactly. Helper calls, routing rules, and state writes are
-  unchanged.
+  unchanged. `harness_adapter.agent_command` builds this preamble
+  automatically for codex/copilot.
 - **No browser automation** — fetch and process **API-fed boards
   only** (Ashby, Lever, SimplifyJobs, Workday CXS). Any job whose
   application would require a browser is routed to `needs_review`

@@ -74,3 +74,39 @@ export function stopProcessTree(pid: number): void {
     /* already exited, or taskkill unavailable — nothing more we can do */
   }
 }
+
+/**
+ * Liveness check for a PID we do not own. Signal 0 performs the kernel's
+ * permission/existence check without delivering anything (Node emulates it
+ * on Windows too). EPERM means the process exists but belongs to another
+ * user — still alive for our purposes.
+ */
+export function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/**
+ * Stop a run by PID, whether or not this process spawned it. Used for runs
+ * the TUI adopted from the lock file (a scheduler tick, or a run left alive
+ * after the user quit with `q`), where there is no ChildProcess handle to
+ * signal. Same platform split as stopProcessTree: POSIX gets a graceful
+ * SIGTERM (run_job_agent.py handles it), Windows gets taskkill /T /F.
+ */
+export function stopPid(pid: number): void {
+  if (!pidAlive(pid)) return;
+  if (process.platform === "win32") {
+    stopProcessTree(pid);
+    return;
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    /* exited between the liveness check and the signal — nothing to do */
+  }
+}

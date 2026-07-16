@@ -26,7 +26,11 @@ These lines are how the TUI's live-run screen shows phase progress and
 which job is currently being applied to — treat them as required output,
 not optional narration, and never bundle them into a larger sentence.
 
-- Right before starting Phase 1: `[•] Scraping job boards`
+- **Your very first line of output, before the session start checklist and
+  before any tool call:** `[•] Scraping job boards`. Do not wait until the
+  fetches actually begin — until this line is printed the TUI cannot name
+  the phase at all and shows the user a bare "run in progress…", which on
+  a real run is the first half of the whole session.
 - Right after step 9 (unique canonical batch built), before starting step
   10's fit-gate loop: `[✓] Scraping job boards` then
   `[•] Filtering + fit-gating`
@@ -224,6 +228,14 @@ not optional narration, and never bundle them into a larger sentence.
     matches after — do not stop early.
 
 ### Phase 2 — Tailor
+0a. Build the parked set ONCE, before tailoring anything:
+   `python3 scripts/state/interest_letter.py pending`
+   Each line is a job parked awaiting the user's interest letter (see
+   Phase 3 step 5). Skip those job_keys entirely this run — do not tailor
+   them, do not apply to them, do not record any event for them. They are
+   waiting on a human, and re-tailoring them every 30 minutes would burn
+   tokens to produce nothing. They become eligible again automatically
+   once the user approves a letter.
 For each job in scrape_batch.json:
 0. Safety guard: if a job with source "workday" somehow reached this
    batch, do not tailor it — route it to needs_review per the Workday
@@ -284,21 +296,101 @@ For each job with ats_score >= 60:
    `https://github.com/<github_username>` before filling a field that
    expects a URL; if only the legacy "linkedin_url"/"github_url" keys are
    present, use them as-is (already a full URL).
+
+   **Dropdowns, comboboxes, and typeaheads — never accept an unconfirmed
+   match.** Typing into an ATS location/school/degree widget filters a list
+   and *highlights* an option; it does not select one. Typing "Seattle" and
+   pressing Enter/Tab/clicking away has been observed to commit whatever
+   the widget happened to highlight — e.g. "Settle" or the first entry
+   beginning with "Se" — silently submitting a wrong answer. Treat any
+   `<select>`, `role="combobox"`, `role="listbox"`, or input that renders a
+   suggestion popup with this protocol:
+
+   a. **Native `<select>`:** select by exact option text (or exact value).
+      Never select by index or by partial text.
+   b. **Combobox/typeahead:** type the value, wait for the option list to
+      render, then read the rendered options back with a snapshot. Click
+      the option whose **visible text matches the intended value exactly**
+      (case-insensitive, trimmed). Never press Enter to take whatever is
+      highlighted, and never click by position ("the first one").
+   c. **No exact match?** Retry once with a more specific query — for a
+      location, the widget's own format is usually `"<City>, <State>"` or
+      `"<City>, <State>, <Country>"`, so try those forms. A *unique*
+      case-insensitive match on the full intended value still counts as
+      exact.
+   d. **Still no exact match, or several options match equally?** Do NOT
+      guess and do NOT submit. Route the job to needs_review with reasoning
+      `"dropdown '<field label>' has no exact option for '<value>': <up to
+      5 options seen>; user to apply manually"` and move to the next job.
+      A wrong city on a submitted application cannot be undone; a
+      needs_review can.
+   e. **After choosing, verify:** re-read the field's committed value from
+      the DOM and confirm it equals the intended value. If it doesn't, treat
+      it as (d) — the widget rejected or rewrote the choice.
+
+   The same rule governs any field where the form constrains the answer to
+   a fixed set (work authorization, degree, gender, ethnicity): the value
+   submitted must be one the user actually supplied in `safe_fields`, mapped
+   to an option that matches it exactly. Never invent an answer, and never
+   settle for "closest". A `safe_fields` value that is empty means the user
+   declined — leave the field untouched if it is optional, and if it is
+   required, route to needs_review rather than picking a value for them.
+   **Free-text motivation questions ("Why do you want to work here?").**
+   Some forms ask an open essay question — "Why do you want to work at
+   <company>?", "Why this role?", "What interests you about us?" — that is
+   NOT the cover letter and that `safe_fields` cannot answer. You must never
+   write one yourself: an invented reason is a claim the applicant will be
+   asked to defend in an interview. Handle it like this:
+   a. Ask the store whether the user has already approved an answer:
+      `python3 scripts/state/interest_letter.py approved-text '<job_key>'`
+      Exit code 0 → stdout IS the answer; paste it verbatim into the field
+      and carry on with the application. Exit code 2 → no approved answer.
+   b. On exit code 2, park the job — do NOT apply, and do NOT guess:
+      `python3 scripts/state/interest_letter.py request '<json>'`
+      with `{"job_key", "company", "title", "url", "apply_url",
+      "question", "jd_excerpt"}`. `question` must be the form's exact
+      wording; `jd_excerpt` is the JD text (the helper truncates it).
+   c. Print `[parked] <title> @ <company> — awaiting interest letter` and
+      move to the next job.
+   d. Record NOTHING for a parked job: no record-event, no
+      applied_jobs.json row, no review_queue row, no Discord. Parking is
+      not an outcome — the job is unfinished, and a needs_review entry
+      would make `can-apply` block it forever, so the user's answer could
+      never be used. The store is the only record. This is the one
+      deliberate exception to "record every job you touch", and it exists
+      precisely so the job stays applicable.
+   e. The user writes or approves an answer in the TUI's Letters tab; the
+      next run reaches step (a), gets exit code 0, and applies normally.
 4. Attach the matching resume PDF from data/resumes/
    (base_resume_<resume_used>.pdf — e.g. base_resume_swe.pdf,
    base_resume_ai_ml.pdf, base_resume_balanced.pdf,
    base_resume_cyber.pdf, base_resume_networking_cyber.pdf —
    matching resume_used from Phase 2).
 5. Paste tailored cover letter into the cover letter field if present.
-6. Submit. Capture confirmation page or error.
-7. Log result to data/applied_jobs.json immediately via the state helper —
+6. **Pre-submit verification (mandatory — do this before every submit).**
+   Snapshot the filled form and check, field by field, that every value
+   about to be submitted is one you intended:
+   - Each filled value equals the `safe_fields` value it came from (or the
+     resume/cover-letter/constructed profile URL for those fields).
+     Compare exactly, after trimming — not "looks close".
+   - No field the user left blank in `safe_fields` has acquired a value.
+   - Every dropdown/combobox shows the exact option intended per step 3.
+   If ANY value doesn't match, do not submit. Route the job to
+   needs_review with reasoning naming the offending field and both values
+   (`"pre-submit check: field '<label>' holds '<actual>', expected
+   '<intended>'; user to apply manually"`). This check is the last thing
+   standing between a mis-filled widget and a real, irreversible
+   application — never skip it to save a step, and never "fix and submit
+   anyway" without re-running it.
+7. Submit. Capture confirmation page or error.
+8. Log result to data/applied_jobs.json immediately via the state helper —
    do not batch writes.
-8. Record an internal event for the outcome via the canonical helper:
+9. Record an internal event for the outcome via the canonical helper:
    `python3 scripts/state/job_state.py record-event '<event-json>'`
    Use status "applied", "needs_review", or "failed" matching the
    status written to applied_jobs.json. Include job_key and reasoning
    for needs_review and failed.
-9. If and only if the outcome status is "applied", sync exactly one row
+10. If and only if the outcome status is "applied", sync exactly one row
    to the Google Sheet internship tracker (after the applied_jobs.json
    entry and the internal event are recorded):
    `python3 scripts/jobs/sync_internship_tracker.py '<row-json>'`

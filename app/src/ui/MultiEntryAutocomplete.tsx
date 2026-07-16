@@ -34,6 +34,7 @@ export function MultiEntryAutocomplete({
   bordered = false,
   showLabel = true,
   maxVisible = 8,
+  help,
 }: {
   label: string;
   query: string;
@@ -55,6 +56,8 @@ export function MultiEntryAutocomplete({
   showLabel?: boolean;
   /** How many suggestion rows to show at once before scrolling. */
   maxVisible?: number;
+  /** Explanatory line under the label, shown only while focused. */
+  help?: string;
 }) {
   const [offset, setOffset] = useState(0);
   useEffect(() => {
@@ -76,6 +79,13 @@ export function MultiEntryAutocomplete({
           {focused ? "> " : "  "}
           {label}
         </Text>
+      ) : null}
+      {focused && help ? (
+        <Box paddingLeft={bordered ? 0 : 2}>
+          <Text dimColor wrap="wrap">
+            {help}
+          </Text>
+        </Box>
       ) : null}
       <Box paddingLeft={bordered ? 0 : 2} flexDirection="column">
         <InlineTextInput value={query} cursor={cursor} active={focused} placeholder={placeholder} wrap="truncate-end" />

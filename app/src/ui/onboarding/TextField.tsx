@@ -16,6 +16,7 @@ export function TextField({
   focused,
   placeholder,
   warning,
+  help,
 }: {
   label: string;
   value: string;
@@ -23,6 +24,9 @@ export function TextField({
   focused: boolean;
   placeholder?: string;
   warning?: string;
+  /** Explanatory line under the label — only rendered while focused, so
+   *  an unfocused stack of fields stays scannable. */
+  help?: string;
 }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -30,6 +34,13 @@ export function TextField({
         {focused ? "> " : "  "}
         {label}
       </Text>
+      {focused && help ? (
+        <Box paddingLeft={2}>
+          <Text dimColor wrap="wrap">
+            {help}
+          </Text>
+        </Box>
+      ) : null}
       <Box paddingLeft={2}>
         <InlineTextInput value={value} cursor={cursor} active={focused} placeholder={placeholder} wrap="truncate-end" />
       </Box>

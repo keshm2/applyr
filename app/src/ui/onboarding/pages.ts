@@ -10,13 +10,31 @@
  * there (profileLinks.ts / top-level targets.json arrays).
  */
 
-export type FieldKind = "text" | "yesno" | "location" | "multi-location" | "multi-company" | "roles";
+export type FieldKind =
+  | "text"
+  | "yesno"
+  | "location"
+  | "multi-location"
+  | "multi-company"
+  | "roles"
+  | "date";
 
 export interface FieldDef {
   id: string;
   label: string;
   kind: FieldKind;
+  /**
+   * Grey hint text shown in an empty field. NEVER put real personal data
+   * here — this file is committed to git and compiled into the published
+   * npm package, so anything written here is public. A real home address
+   * shipped this way once (see the git history for this file); every
+   * example below must be obviously synthetic. Reserved-for-fiction values
+   * only: 555-01xx phone numbers (NANP), example.com email, and street
+   * addresses that are plainly placeholders.
+   */
   placeholder?: string;
+  /** Optional per-field help shown under the label. */
+  help?: string;
 }
 
 export interface PageDef {
@@ -41,15 +59,32 @@ export const PAGES: PageDef[] = [
   {
     title: "Contact",
     fields: [
-      { id: "phone", label: "Phone number", kind: "text", placeholder: "555-201-4477" },
+      {
+        id: "email",
+        label: "Email applications are sent from",
+        kind: "text",
+        placeholder: "you@example.com",
+        help: "Employers reply here — use an address you actually check.",
+      },
+      { id: "phone", label: "Phone number", kind: "text", placeholder: "555-0142" },
       { id: "address_line1", label: "Address line 1", kind: "text", placeholder: "123 Example St" },
-      { id: "address_line2", label: "Address line 2 (optional)", kind: "text" },
+      { id: "address_line2", label: "Address line 2 (optional)", kind: "text", placeholder: "Apt 4B" },
       { id: "zip_code", label: "Zip code", kind: "text", placeholder: "12345" },
     ],
   },
   {
     title: "Location",
-    fields: [{ id: "location", label: "Home location (city, state)", kind: "location", placeholder: "type to search" }],
+    fields: [
+      {
+        id: "location",
+        label: "Home location (city, state)",
+        kind: "location",
+        // A well-known metro, deliberately NOT anyone's actual home city —
+        // see the FieldDef.placeholder warning above.
+        placeholder: "type any city, e.g. Seattle, WA",
+        help: "Suggestions are a shortcut, not a list of allowed answers — if your city isn't offered, type it out and press enter.",
+      },
+    ],
   },
   {
     title: "Profiles",
@@ -66,11 +101,30 @@ export const PAGES: PageDef[] = [
     ],
   },
   {
+    title: "Education",
+    fields: [
+      {
+        id: "graduation_date",
+        label: "Graduation date",
+        kind: "text",
+        placeholder: "June 2027",
+        help: "Optional in general, but required to apply to internships — most intern postings ask for it.",
+      },
+    ],
+  },
+  {
     title: "Demographics",
     fields: [
-      { id: "ethnicity", label: "Ethnicity (optional)", kind: "text" },
+      {
+        id: "gender",
+        label: "Gender (optional)",
+        kind: "text",
+        placeholder: "e.g. Woman / Man / Non-binary / Decline",
+        help: "Asked by many EEO forms. Leave blank to decline — applyr never invents an answer.",
+      },
+      { id: "ethnicity", label: "Ethnicity (optional)", kind: "text", placeholder: "e.g. Asian / Decline" },
       { id: "hispanic_or_latino", label: "Hispanic or Latino? (y/n)", kind: "yesno" },
-      { id: "date_of_birth", label: "Date of birth (optional)", kind: "text", placeholder: "MM/DD/YYYY" },
+      { id: "date_of_birth", label: "Date of birth (optional)", kind: "date", placeholder: "MM/DD/YYYY" },
     ],
   },
   {
@@ -87,7 +141,13 @@ export const PAGES: PageDef[] = [
   {
     title: "Job targets",
     fields: [
-      { id: "preferred_locations", label: "Preferred job locations", kind: "multi-location", placeholder: "type to search" },
+      {
+        id: "preferred_locations",
+        label: "Preferred job locations (optional)",
+        kind: "multi-location",
+        placeholder: "type any city — enter adds it, blank enter moves on",
+        help: "A priority list, not a filter: applyr searches the whole US either way, these just sort matching jobs to the top. Any city works, listed or not.",
+      },
       { id: "target_companies", label: "Target companies", kind: "multi-company", placeholder: "type to search" },
     ],
   },

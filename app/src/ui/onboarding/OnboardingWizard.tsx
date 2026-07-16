@@ -19,6 +19,7 @@ import {
   moveCursorRight,
 } from "../TextInput.js";
 import { filterSuggestions } from "../autocomplete.js";
+import { acceptDobDigit, deleteDobDigit, dobDigits, dobError, formatDob } from "./dateInput.js";
 import { PAGES, TOTAL_FIELDS, RESUME_PAGE_INDEX, COMPLETION_PAGE_INDEX, type FieldDef } from "./pages.js";
 import { useFieldFocus } from "./useFieldFocus.js";
 import { useSkipDefaultFlow } from "./useSkipDefaultFlow.js";
@@ -211,6 +212,10 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
     return Array.isArray(raw) ? [...raw] : [];
   });
   const [suggestionIndex, setSuggestionIndex] = useState(0);
+  /** Whether the user has explicitly arrowed onto a suggestion. Enter only
+   *  substitutes a suggestion for what they typed once this is true or the
+   *  suggestion genuinely completes their text — see resolveTypedChoice. */
+  const [suggestionTouched, setSuggestionTouched] = useState(false);
   const [entryHint, setEntryHint] = useState("");
   const [resumeInputActive, setResumeInputActive] = useState(false);
   const [size, setSize] = useState(stdoutSize);
@@ -247,9 +252,48 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
         ? filterSuggestions(draftText, directory, 8, (e) => e.display, companyWeight).map((e) => e.display)
         : [];
 
+  /**
+   * Persist whatever the focused field currently holds, without advancing.
+   *
+   * Called on every way of *leaving* a field (tab, up/down, page change).
+   * Drafts used to live only in `draftText`/`addedItems` and were folded
+   * into `values` solely by commitAndAdvance — i.e. only on Enter — so
+   * `loadDraftForField` would overwrite them the moment focus moved.
+   * Typing your target companies or roles and then tabbing away silently
+   * threw them out; that is the "target jobs during install is not saved"
+   * report. A blank draft is deliberately left uncommitted so the
+   * enter-on-blank skip/default flow keeps its meaning.
+   */
+  function commitDraftForField(field: FieldDef | undefined): Set<string> | undefined {
+    if (!field) return undefined;
+    if (field.kind === "multi-location" || field.kind === "multi-company") {
+      if (addedItems.length === 0) return undefined;
+      const existing = values[field.id];
+      const unchanged =
+        Array.isArray(existing) &&
+        existing.length === addedItems.length &&
+        existing.every((v, i) => v === addedItems[i]);
+      if (unchanged) return undefined;
+      persistFieldValue(root, field.id, addedItems, directory);
+      setValues((v) => ({ ...v, [field.id]: [...addedItems] }));
+      return focus.commit(field.id);
+    }
+    const text = draftText.trim();
+    if (!text) return undefined;
+    if (field.kind === "date" && dobError(dobDigits(text))) return undefined; // never persist an invalid date
+    const value: string | string[] =
+      field.kind === "roles" ? text.split(",").map((s) => s.trim()).filter(Boolean) : text;
+    const existing = values[field.id];
+    if (typeof existing === "string" && existing === text) return undefined;
+    persistFieldValue(root, field.id, value, directory);
+    setValues((v) => ({ ...v, [field.id]: value }));
+    return focus.commit(field.id);
+  }
+
   function loadDraftForField(field: FieldDef | undefined) {
     setEntryHint("");
     setSuggestionIndex(0);
+    setSuggestionTouched(false);
     if (!field) {
       setDraftText("");
       setDraftCursor(0);
@@ -271,16 +315,22 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
 
   function focusField(newIndex: number) {
     const clamped = Math.max(0, Math.min(fields.length - 1, newIndex));
+    if (clamped === focus.focusIndex) return;
+    commitDraftForField(focusedField);
     focus.setFocusIndex(clamped);
     loadDraftForField(fields[clamped]);
   }
 
-  function goToPage(nextPageRaw: number) {
+  function goToPage(nextPageRaw: number, committedOverride?: Set<string>) {
+    // `focus.committed` is a stale closure once commitDraftForField has run
+    // this tick, so thread the set it returns through rather than reading it
+    // back (same reasoning as useFieldFocus.commit's own doc comment).
+    const committedNow = committedOverride ?? commitDraftForField(focusedField) ?? focus.committed;
     const nextPage = Math.max(0, Math.min(COMPLETION_PAGE_INDEX, nextPageRaw));
     setCurrentPage(nextPage);
     focus.setFocusIndex(0);
     loadDraftForField(PAGES[nextPage]?.fields[0]);
-    persistOnboardingMeta(root, [...focus.committed], nextPage, nextPage === COMPLETION_PAGE_INDEX);
+    persistOnboardingMeta(root, [...committedNow], nextPage, nextPage === COMPLETION_PAGE_INDEX);
     // Every page change — whichever of the three ways it happens (blocked
     // Shift+→'s own successful retry, Shift+←, or the last field on a page
     // auto-advancing via advanceFocusOrPage) — lands on a page the alert
@@ -331,7 +381,12 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
       const next = deleteBackward({ value: draftText, cursor: draftCursor });
       setDraftText(next.value);
       setDraftCursor(next.cursor);
-      if (resetSuggestion) setSuggestionIndex(0);
+      if (resetSuggestion) {
+        setSuggestionIndex(0);
+        // Editing the text invalidates any earlier arrow-selection: the
+        // highlighted row is about to be a match for different text.
+        setSuggestionTouched(false);
+      }
       setEntryHint("");
       return;
     }
@@ -339,7 +394,12 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
       const next = insertAtCursor({ value: draftText, cursor: draftCursor }, input);
       setDraftText(next.value);
       setDraftCursor(next.cursor);
-      if (resetSuggestion) setSuggestionIndex(0);
+      if (resetSuggestion) {
+        setSuggestionIndex(0);
+        // Editing the text invalidates any earlier arrow-selection: the
+        // highlighted row is about to be a match for different text.
+        setSuggestionTouched(false);
+      }
       setEntryHint("");
     }
   }
@@ -356,19 +416,42 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
     commitAndAdvance(field.id, readExampleArray(root, "role_keywords"));
   }
 
+  /**
+   * What Enter means in a location field once the user has typed
+   * something. A suggestion only replaces their text if they explicitly
+   * arrowed onto it, or if it genuinely *completes* what they typed
+   * (case-insensitive prefix — "seat" → "Seattle, WA").
+   *
+   * Previously this was `suggestions[suggestionIndex] ?? typed`, which
+   * blindly took the top fuzzy match: typing a city that isn't in
+   * US_CITIES — "Marysville, WA", "Lynnwood, WA" — but that fuzzy-matches
+   * some unrelated entry would silently commit the wrong city. Freehand is
+   * always allowed; US_CITIES only offers suggestions, it is not an enum.
+   */
+  function resolveLocationChoice(typed: string): string {
+    const highlighted = suggestions[suggestionIndex];
+    if (suggestionTouched && highlighted) return highlighted;
+    if (highlighted && highlighted.toLowerCase().startsWith(typed.toLowerCase())) return highlighted;
+    return typed;
+  }
+
   function handleLocationEnter(field: FieldDef) {
     const typed = draftText.trim();
     if (!typed) {
       commitAndAdvance(field.id, "");
       return;
     }
-    commitAndAdvance(field.id, suggestions[suggestionIndex] ?? typed);
+    commitAndAdvance(field.id, resolveLocationChoice(typed));
   }
 
   function handleMultiEnter(field: FieldDef) {
     const typed = draftText.trim();
     if (typed) {
-      const chosen = suggestions[suggestionIndex] ?? (field.kind === "multi-location" ? typed : undefined);
+      // Locations are an open set (freehand allowed, see
+      // resolveLocationChoice); companies are a closed vetted set, so only
+      // a real directory entry can be added.
+      const chosen =
+        field.kind === "multi-location" ? resolveLocationChoice(typed) : suggestions[suggestionIndex];
       if (!chosen) {
         setEntryHint(
           "No matching vetted company — pick one from the list, or leave blank and press enter twice to skip.",
@@ -388,20 +471,70 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
     }
     const outcome = skipFlow.resolveBlankEnter();
     if (outcome === "warn") return;
-    if (field.kind === "multi-location") {
-      commitAndAdvance(field.id, readExampleArray(root, "preferred_locations"));
-    } else {
-      commitAndAdvance(field.id, []);
+    // Both commit empty. Locations are deliberately NOT defaulted to a
+    // starter list any more: they vary per person (a Seattle-area default
+    // is wrong for most users), and per AGENTS.md "Location handling"
+    // preferred_locations is a priority list, not a filter — so empty
+    // costs the user nothing except result ordering.
+    commitAndAdvance(field.id, []);
+  }
+
+  /** Date-of-birth editing. `draftText` holds the *formatted* value; the
+   *  raw digits are derived from it, so there's no second source of truth
+   *  to keep in sync. The cursor is pinned to the end — the separators are
+   *  machine-inserted, so mid-string editing would only fight the
+   *  formatter. */
+  function editDob(input: string, key: Key) {
+    const current = dobDigits(draftText);
+    if (key.backspace || key.delete) {
+      const shown = formatDob(deleteDobDigit(current));
+      setDraftText(shown);
+      setDraftCursor(shown.length);
+      setEntryHint("");
+      return;
     }
+    if (key.ctrl || key.meta || !input) return;
+    let next = current;
+    for (const ch of input) next = acceptDobDigit(next, ch);
+    if (next === current) return; // keystroke refused (would make an invalid date)
+    const shown = formatDob(next);
+    setDraftText(shown);
+    setDraftCursor(shown.length);
+    setEntryHint("");
+  }
+
+  /** Suggestion lists own up/down only while they have something to show;
+   *  otherwise up/down move between fields (see handleFieldInput). */
+  function moveSuggestion(delta: number) {
+    setSuggestionTouched(true);
+    setSuggestionIndex((i) => Math.max(0, Math.min(Math.max(0, suggestions.length - 1), i + delta)));
   }
 
   function handleFieldInput(input: string, key: Key) {
     const field = focusedField;
     if (!field) return;
+    const suggestionsOpen =
+      (field.kind === "location" || field.kind === "multi-location" || field.kind === "multi-company") &&
+      suggestions.length > 0;
+    // Up/down move between fields — the wizard's other navigation key
+    // besides tab. Requested because tab-only meant that once focus left a
+    // field the only way back was to walk the page or bounce off it. An
+    // open suggestion list claims up/down first (it needs them to pick a
+    // row); with no list showing they fall through to field movement.
+    if ((key.upArrow || key.downArrow) && !suggestionsOpen) {
+      return focusField(focus.focusIndex + (key.downArrow ? 1 : -1));
+    }
     switch (field.kind) {
       case "text":
         if (key.return) return commitAndAdvance(field.id, draftText.trim());
         return editText(input, key, false);
+      case "date":
+        if (key.return) {
+          const err = dobError(dobDigits(draftText));
+          if (err) return setEntryHint(err);
+          return commitAndAdvance(field.id, draftText.trim());
+        }
+        return editDob(input, key);
       case "roles":
         if (key.return) return handleRolesEnter(field);
         return editText(input, key, false);
@@ -413,14 +546,14 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
         return;
       case "location":
         if (key.return) return handleLocationEnter(field);
-        if (key.upArrow) return setSuggestionIndex((i) => Math.max(0, i - 1));
-        if (key.downArrow) return setSuggestionIndex((i) => Math.min(Math.max(0, suggestions.length - 1), i + 1));
+        if (key.upArrow) return moveSuggestion(-1);
+        if (key.downArrow) return moveSuggestion(1);
         return editText(input, key, true);
       case "multi-location":
       case "multi-company":
         if (key.return) return handleMultiEnter(field);
-        if (key.upArrow) return setSuggestionIndex((i) => Math.max(0, i - 1));
-        if (key.downArrow) return setSuggestionIndex((i) => Math.min(Math.max(0, suggestions.length - 1), i + 1));
+        if (key.upArrow) return moveSuggestion(-1);
+        if (key.downArrow) return moveSuggestion(1);
         return editText(input, key, true);
     }
   }
@@ -442,11 +575,16 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
 
       if (key.shift && key.leftArrow) return goToPage(currentPage - 1);
       if (key.shift && key.rightArrow) {
-        if (isFieldPage && !allFieldsCommittedOnPage(currentPage, focus.committed)) {
+        // Commit first, then gate. A value typed but not yet Entered is an
+        // answer — checking the gate before committing meant typing a field
+        // and pressing shift+→ was refused with "answer every field on this
+        // page", pointing at the field the user had just filled in.
+        const committedNow = commitDraftForField(focusedField) ?? focus.committed;
+        if (isFieldPage && !allFieldsCommittedOnPage(currentPage, committedNow)) {
           setBlockedAdvanceAttempted(true);
           return;
         }
-        return goToPage(currentPage + 1);
+        return goToPage(currentPage + 1, committedNow);
       }
 
       // Enter is taken on this page by ResumesScreen itself (converts the
@@ -532,6 +670,22 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
             cursor={isFocused ? draftCursor : committedText.length}
             focused={isFocused}
             placeholder={field.placeholder}
+            help={field.help}
+          />
+        );
+      case "date":
+        return (
+          <TextField
+            key={field.id}
+            label={field.label}
+            value={isFocused ? draftText : committedText}
+            cursor={isFocused ? draftCursor : committedText.length}
+            focused={isFocused}
+            placeholder={field.placeholder}
+            help={field.help}
+            // Only the live per-keystroke complaint (e.g. "Feb has 28
+            // days in 2005") — refused digits simply don't appear.
+            warning={isFocused && entryHint ? entryHint : undefined}
           />
         );
       case "roles":
@@ -570,6 +724,7 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
             suggestions={isFocused ? suggestions : []}
             suggestionIndex={suggestionIndex}
             placeholder={field.placeholder}
+            help={field.help}
           />
         );
       case "multi-location":
@@ -577,7 +732,7 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
         const warning = isFocused
           ? skipFlow.warned
             ? field.kind === "multi-location"
-              ? `No locations entered — applyr will use its default list: ${readExampleArray(root, "preferred_locations").join(", ")}. Press enter again to accept, or start typing to override.`
+              ? "No preferred locations — applyr still searches the whole US either way; these only push matching jobs to the top. Press enter again to continue, or start typing to add one."
               : "No companies added — the project's vetted company list is still watched regardless. Press enter again to continue, or start typing to add one."
             : entryHint || undefined
           : undefined;
@@ -593,6 +748,7 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
             addedItems={isFocused ? addedItems : committedList}
             warning={warning}
             placeholder={field.placeholder}
+            help={field.help}
           />
         );
       }
@@ -632,7 +788,7 @@ export function OnboardingWizard({ root, onDone }: { root: string; onDone: () =>
         {page.fields.map((field, idx) => renderField(field, idx))}
       </QuestionFrame>
     );
-    footerHints = "tab/shift+tab move field · enter commit & next · shift+←/→ prev/next page";
+    footerHints = "↑↓/tab move field · enter commit & next · shift+←/→ prev/next page";
   }
 
   return (

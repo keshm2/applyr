@@ -18,6 +18,7 @@ export function AutocompleteTextField({
   suggestions,
   suggestionIndex,
   placeholder,
+  help,
 }: {
   label: string;
   query: string;
@@ -26,6 +27,8 @@ export function AutocompleteTextField({
   suggestions: string[];
   suggestionIndex: number;
   placeholder?: string;
+  /** Explanatory line under the label, shown only while focused. */
+  help?: string;
 }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -33,6 +36,13 @@ export function AutocompleteTextField({
         {focused ? "> " : "  "}
         {label}
       </Text>
+      {focused && help ? (
+        <Box paddingLeft={2}>
+          <Text dimColor wrap="wrap">
+            {help}
+          </Text>
+        </Box>
+      ) : null}
       <Box paddingLeft={2}>
         <InlineTextInput value={query} cursor={cursor} active={focused} placeholder={placeholder} wrap="truncate-end" />
       </Box>

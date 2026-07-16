@@ -213,11 +213,16 @@ export const BANNER_WIDTH = BANNER_ROWS[0].length;
  *  row is the binding constraint: five tabs plus the Review "(n)" badge need
  *  ~53 cols, and wrapping it corrupts the pinned frame. The banner
  *  collapses earlier. */
-export const MIN_COLUMNS = 54;
+// Sized by the tab row, which is the widest fixed element and must never
+// wrap (a wrapped row corrupts the frame under it). 7 tabs at a 1-column
+// gap = ~65 cols, plus the two "(N)" count badges and horizontal padding =
+// ~75 worst case. Raised 54 -> 76 when the Letters tab landed; every past
+// tab-count change bumped this the same way (40->44->54).
+export const MIN_COLUMNS = 76;
 export const MIN_ROWS = 12;
 
 /** Build/release marker shown in the side panel footer. */
-export const BUILD_MARKER = "0.9.0a";
+export const BUILD_MARKER = "0.9.1a";
 
 /** Side panel width — narrow enough to coexist with content on 64-col+
  *  terminals. The panel hides below that width (see App showSidebar). */

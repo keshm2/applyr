@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { logDir } from "./settings.js";
+import { pidAlive } from "./platform.js";
 
 export interface AppliedJob {
   job_id: string;
@@ -160,6 +161,30 @@ export function latestSessionLog(root: string): string | undefined {
       .sort();
     const last = sessions[sessions.length - 1];
     return last ? path.join(dir, last) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * PID of the run currently holding the runner's single-flight lock, or
+ * undefined when nothing is in flight. `scripts/runtime/run_job_agent.py`
+ * writes this file when it acquires the lock; reading it is the only way
+ * the TUI can see — and stop — a run it did not spawn itself: a scheduler
+ * tick, or a run left alive after the user quit the TUI with `q`.
+ *
+ * A pid file whose process is gone means a crashed run left the lock
+ * behind (the runner self-heals this on its next attempt), so it is
+ * reported as "no run in flight" rather than a stoppable PID.
+ */
+export function activeRunPid(root: string): number | undefined {
+  try {
+    const raw = fs.readFileSync(
+      path.join(logDir(root), ".run_job_agent.lock", "pid"),
+      "utf8",
+    );
+    const pid = Number.parseInt(raw.trim(), 10);
+    return pidAlive(pid) ? pid : undefined;
   } catch {
     return undefined;
   }

@@ -11,9 +11,21 @@
 /data/review_queue.json
 /data/job_registry.json
 /data/job_events.jsonl
+# Interest letters are the user's own words about themselves — PII, same as
+# every other data/ file. NOTE: this list enumerates files individually
+# rather than ignoring /data/, so ANY new state file must be added here
+# explicitly or it gets committed. Adding a data file? Add it here first.
+/data/interest_letters.json
 
 # Personal PII — base resumes + cover letter
 /data/resumes/
+# Resumes are PII and belong ONLY in data/resumes/. A stray copy elsewhere
+# (app/base_resume_swe.pdf was staged once) is still a resume, so ignore the
+# pattern repo-wide rather than trusting the one directory rule.
+base_resume_*.pdf
+base_resume_*.md
+*_resume.pdf
+cover_letter*.pdf
 
 # Playwright MCP browser session artifacts (logs, page snapshots) — can
 # land in any subdirectory depending on the MCP server's cwd at the time

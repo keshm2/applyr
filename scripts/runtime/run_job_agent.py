@@ -28,6 +28,12 @@ import sys
 import time
 from datetime import datetime, timezone
 
+# Sibling import: the runner is invoked as a path (`python3
+# scripts/runtime/run_job_agent.py`) from the repo root, not as a package, so
+# its own directory isn't guaranteed to be on sys.path under every harness.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import harness_adapter  # noqa: E402
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(PROJECT_ROOT)
 IS_WINDOWS = os.name == "nt"
@@ -366,6 +372,13 @@ def _run(logs_dir: str, run_log: str) -> int:
         log(run_log, "ABORTED: failed to ensure canonical registry/event files. Run manually to fix.")
         return 1
 
+    # Interest-letter store. A warning, not an abort: a run that can't read it
+    # simply never parks a job for an essay question, which is degraded but
+    # safe — the apply loop's own rule still forbids inventing an answer.
+    if py_run([os.path.join("scripts", "state", "interest_letter.py"), "ensure-file"]).returncode != 0:
+        log(run_log, "WARNING: could not ensure data/interest_letters.json; "
+                     "interest-letter parking will be unavailable this run.")
+
     if py_run([os.path.join("scripts", "validate", "generate_agent_definitions.py"), "--check"]).returncode != 0:
         log(run_log, "WARNING: generated agent definitions are stale — run scripts/validate/generate_agent_definitions.py")
 
@@ -397,6 +410,16 @@ def _run(logs_dir: str, run_log: str) -> int:
     session_log = os.path.join(logs_dir, f"session_{timestamp}.log")
     with open(session_log, "a", encoding="utf-8") as fh:
         fh.write(f"run_job_agent: start {now_utc()} harness={harness}\n")
+        # Seed the first progress marker deterministically rather than relying
+        # on the orchestrator to print it. agents/bodies/job-scraper.md asks
+        # for `[•] Scraping job boards` as the run's first line, but a model
+        # can and does forget: a real 794-line session emitted nothing until
+        # line 428, so the TUI could not name the phase for the first half of
+        # the run and showed a bare "run in progress…". Scrape is always
+        # phase 1, and this line is written before the harness is invoked, so
+        # it is true by construction. The agent's own `[✓] Scraping job
+        # boards` later supersedes it.
+        fh.write("[•] Scraping job boards\n")
 
     # --- Session cap ---------------------------------------------------------
     raw_cap = os.environ.get("APPLYR_SESSION_CAP", os.environ.get("ARES_SESSION_CAP", "25")) or "25"
@@ -439,42 +462,25 @@ def _run(logs_dir: str, run_log: str) -> int:
 
     run_rc = 0
     exe = shutil.which(harness) or harness
+    # The harness-specific argv shapes live in harness_adapter.agent_command —
+    # the one place allowed to branch per harness (AGENTS.md "Harness
+    # capability matrix"). They were inline here until interest-letter
+    # generation needed to launch an agent too; extracting them beat keeping
+    # two copies in sync. The extraction was verified argv-identical for all
+    # four harnesses before the swap.
     with open(session_log, "a", encoding="utf-8") as out:
-        if harness == "opencode":
-            print_flag = []
-            try:
-                help_txt = subprocess.run([exe, "run", "--help"], stdout=subprocess.PIPE,
-                                          stderr=subprocess.STDOUT, text=True).stdout or ""
-                import re as _re
-                if _re.search(r"--print([^-0-9A-Za-z]|$)", help_txt):
-                    print_flag = ["--print"]
-            except OSError:
-                pass
-            cmd = [exe, "run", "--agent", "job-scraper", *print_flag, run_prompt]
-            run_rc = _run_harness_cmd(cmd, out)
-        elif harness == "claude":
-            perm = os.environ.get("APPLYR_CLAUDE_PERMISSION_MODE", "bypassPermissions")
-            cmd = [exe, "-p", "--permission-mode", perm,
-                   "You are the job-scraper orchestrator. Read agents/bodies/job-scraper.md "
-                   "and execute it exactly as your instructions. " + run_prompt]
-            run_rc = _run_harness_cmd(cmd, out)
-        else:
-            degraded = (
-                "You are the job-scraper orchestrator. Read agents/bodies/job-scraper.md and "
-                "execute it exactly as your instructions. Your harness has no subagent registry: "
-                "when the workflow delegates to @resume-tailor or @discord-reporter, read "
-                "agents/bodies/resume-tailor.md or agents/bodies/discord-reporter.md and perform "
-                "that role inline, following it exactly. Unless browser-automation tools are "
-                "actually available to you, apply the degraded harness path from AGENTS.md "
-                "'Harness capability matrix': fetch API-fed boards only, and route any job whose "
-                "application requires a browser to needs_review — never silently skip it and never "
-                "attempt a browser apply. " + run_prompt
-            )
-            if harness == "codex":
-                cmd = [exe, "exec", degraded]
-            else:
-                cmd = [exe, "-p", degraded, "--allow-all-tools"]
-            run_rc = _run_harness_cmd(cmd, out)
+        cmd = harness_adapter.agent_command(
+            exe, harness, "job-scraper", run_prompt,
+            delegates=("resume-tailor", "discord-reporter"),
+            extra_preamble=(
+                "Unless browser-automation tools are actually available to you, apply the degraded "
+                "harness path from AGENTS.md 'Harness capability matrix': fetch API-fed boards only, "
+                "and route any job whose application requires a browser to needs_review — never "
+                "silently skip it and never attempt a browser apply."
+            ),
+            role="orchestrator",
+        )
+        run_rc = _run_harness_cmd(cmd, out)
 
     # A stop was requested (SIGTERM from the TUI, or SIGINT/Ctrl+C from a
     # terminal) — _handle_stop_signal() already killed the harness's process
