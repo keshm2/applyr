@@ -32,15 +32,21 @@ npm package: `@keshm/applyr` version `0.9.7-alpha.0`.
   and Google OAuth redirects, since a desktop app can't sit at a
   `localhost` URL to receive them.
 - **All three installers can now also install the desktop app**, opt-in
-  alongside the TUI. New `scripts/install/install_desktop.{sh,ps1}`:
-  detects Rust and OS-native GUI build dependencies, asks before
-  installing anything missing, builds in release mode, and installs
-  the platform-native way — `/Applications` on macOS (falling back to
-  `~/Applications` rather than requiring sudo), `apt`/`dnf`/an AppImage
-  + app-launcher entry on Linux, a no-admin-prompt NSIS installer on
-  Windows. Never fails the main install — the TUI stays the reliable
-  baseline either way. `applyr uninstall` removes the desktop app too,
-  if present.
+  alongside the TUI. New `scripts/install/install_desktop.{sh,ps1}`
+  first check this checkout's matching GitHub release for a prebuilt
+  bundle — built once on CI (`.github/workflows/desktop-release.yml`,
+  `tauri-apps/tauri-action` across macOS/Linux/Windows runners) — and
+  just download + install that: no Rust, no Xcode Command Line Tools,
+  no Visual C++ Build Tools, nothing beyond curl, the same as
+  installing any other compiled app. Only falls back to compiling from
+  source (detects Rust + OS-native GUI build deps, asks before
+  installing anything missing) when no matching prebuilt bundle exists
+  yet. Installs the platform-native way either way — `/Applications`
+  on macOS (falling back to `~/Applications` rather than requiring
+  sudo), `apt`/`dnf`/an AppImage + app-launcher entry on Linux, a
+  no-admin-prompt NSIS installer on Windows. Never fails the main
+  install — the TUI stays the reliable baseline either way. `applyr
+  uninstall` removes the desktop app too, if present.
 - Settings (both TUI and the new desktop app) show a small, faded
   `build <version>` marker — one shared constant
   (`packages/core/src/version.ts`) so both surfaces always agree.

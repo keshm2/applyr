@@ -112,7 +112,7 @@ try_prebuilt_install() {
   say "checking the $tag GitHub release for a prebuilt desktop app…"
   local release_json
   release_json="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$tag" 2>/dev/null || true)"
-  if [ -z "$release_json" ] || ! echo "$release_json" | jq -e '.assets' >/dev/null 2>&1; then
+  if [ -z "$release_json" ] || ! printf '%s' "$release_json" | jq -e '.assets' >/dev/null 2>&1; then
     say "no $tag release with build assets found on GitHub — will build from source instead."
     return 1
   fi
@@ -125,8 +125,15 @@ try_prebuilt_install() {
   if [ "$OS" = "Darwin" ]; then
     local arch asset_url
     arch="$(uname -m)"
-    [ "$arch" = "arm64" ] && arch="aarch64"
-    asset_url="$(echo "$release_json" | jq -r --arg a "$arch" \
+    # Tauri's own bundle-naming isn't symmetric: Apple Silicon gets
+    # "aarch64" but Intel gets "x64", not "x86_64" — verified against a
+    # real build's asset names, not assumed. Match uname -m's actual
+    # output to Tauri's actual filename token for each.
+    case "$arch" in
+      arm64) arch="aarch64" ;;
+      x86_64) arch="x64" ;;
+    esac
+    asset_url="$(printf '%s' "$release_json" | jq -r --arg a "$arch" \
       '[.assets[] | select(.name | endswith(".dmg")) | select(.name | contains($a))][0].browser_download_url // empty')"
     [ -n "$asset_url" ] || { say "no prebuilt macOS ($arch) bundle in $tag — will build from source instead."; return 1; }
 
@@ -143,12 +150,21 @@ try_prebuilt_install() {
     return 0
 
   elif [ "$OS" = "Linux" ]; then
-    # amd64/x86_64 is the only arch CI currently produces; anything else
-    # (e.g. arm64 Linux) falls through to building from source.
+    # .deb uses dpkg's "amd64"/"arm64" arch names; .rpm/.AppImage typically
+    # use uname's "x86_64"/"aarch64" instead — match whichever token this
+    # machine's arch maps to, in either convention, rather than assuming
+    # the one CI currently produces (x86_64 only) is the only one that
+    # will ever exist.
+    local arch_tokens
+    case "$(uname -m)" in
+      x86_64) arch_tokens="amd64|x86_64" ;;
+      aarch64|arm64) arch_tokens="arm64|aarch64" ;;
+      *) arch_tokens="$(uname -m)" ;;
+    esac
     local asset_urls
-    asset_urls="$(echo "$release_json" | jq -r \
-      '.assets[] | select(.name | test("\\.(deb|rpm|AppImage)$")) | .browser_download_url')"
-    [ -n "$asset_urls" ] || { say "no prebuilt Linux bundle in $tag — will build from source instead."; return 1; }
+    asset_urls="$(printf '%s' "$release_json" | jq -r --arg re "\\.(deb|rpm|AppImage)$" --arg arch "($arch_tokens)" \
+      '.assets[] | select(.name | test($re)) | select(.name | test($arch)) | .browser_download_url')"
+    [ -n "$asset_urls" ] || { say "no prebuilt Linux ($(uname -m)) bundle in $tag — will build from source instead."; return 1; }
 
     say "downloading the prebuilt desktop app…"
     local url name
