@@ -167,10 +167,27 @@ Windows: `powershell -ExecutionPolicy Bypass -File scripts\install\install.ps1`
   equivalent typechecks against the real `SupabaseAdapter` and is
   structurally identical, but wasn't exercised against a live signed-in
   session this pass (see Known gaps).
-- Linux and Windows desktop-app install paths are implemented against
-  Tauri's and each package manager's documented behavior and reviewed
-  for shell/PowerShell correctness, but **not run on a real Linux or
-  Windows machine** this pass (see Known gaps).
+- **Post-release follow-up:** desktop app bundles are now built by CI
+  (`.github/workflows/desktop-release.yml`, `tauri-apps/tauri-action`)
+  for macOS (arm64 + x86_64), Linux, and Windows, and attached to this
+  release — `install_desktop.sh`/`.ps1` download and install a
+  prebuilt bundle instead of compiling one locally whenever a match
+  exists, needing nothing beyond curl (no Rust, no Xcode CLT, no
+  Visual C++ Build Tools). Ran the real CI build end-to-end (GitHub
+  Actions run 29721762423, all 4 matrix jobs green) and verified the
+  produced macOS bundle installs and launches correctly on real
+  hardware in ~3 seconds, down from a ~78-second cold from-source
+  build. Caught and fixed two real bugs this surfaced: Tauri's own
+  asset naming isn't symmetric (Intel Macs are "x64", not "x86_64",
+  which `uname -m` reports — would have silently missed the match and
+  fallen back to a from-source build), and `echo "$var" | jq`
+  corrupted the JSON in at least one shell environment (backslash
+  escapes in the release body got interpreted instead of passed
+  through) — replaced with `printf '%s'` throughout. Linux and Windows
+  CI jobs completed successfully (real bundles produced, matching
+  asset-selection logic verified directly against the live release
+  data) but the actual install execution isn't verified on real
+  Linux/Windows hardware (see Known gaps) — only macOS was.
 
 ## Release artifacts
 
@@ -178,14 +195,17 @@ Windows: `powershell -ExecutionPolicy Bypass -File scripts\install\install.ps1`
 - npm: `@keshm/applyr@0.9.7-alpha.0` under the `latest` dist-tag
   (`cd app && npm publish` — `publishConfig` sets `access: public` and
   the tag). Publish requires `npm login`.
-- CI workflow `.github/workflows/tui.yml` runs on the tag; no
-  release-asset uploads are configured (desktop app bundles are built
-  locally by the installer, not attached to the GitHub release).
+- CI workflow `.github/workflows/tui.yml` runs on every push touching
+  the TUI/core. `.github/workflows/desktop-release.yml` builds and
+  attaches desktop app bundles to a tagged release (triggered on `v*`
+  tag pushes, or manually via `workflow_dispatch` for an existing tag).
 
 ## Known gaps
 
-- Desktop app: Linux and Windows install paths untested on real
-  hardware (macOS verified live — see Verification above).
+- Desktop app: the CI-built Linux and Windows bundles install
+  correctly per the asset-matching logic (verified against the live
+  release data) but haven't been run on real Linux/Windows hardware
+  (macOS verified live on real hardware — see Verification above).
 - Desktop app: Jobs / Review queue / History / Resumes screens are
   still placeholders (Phase 14B).
 - Desktop app: hosted↔local pipeline-state sync doesn't exist yet —
