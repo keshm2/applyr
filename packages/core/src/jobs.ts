@@ -419,9 +419,16 @@ const DISABLED_SOURCE: SourceResult = { state: "skipped", count: 0, detail: "dis
  *  per-source fetch (see jobCache.ts). Cache rows are always populated
  *  under query='' (refreshJobCache.ts stores the full unfiltered board,
  *  same shape Ashby/Lever/Greenhouse/SmartRecruiters already fetch live)
- *  — query-string matching happens downstream, on the merged result set,
- *  via titleMatchesQuery, exactly the same for a cached or a live job.
- *  Only wired for the four sources refreshJobCache.ts actually populates;
+ *  — the final, authoritative query-string matching still happens
+ *  downstream on the merged result set via titleMatchesQuery, exactly
+ *  the same for a cached or a live job. The search query is also passed
+ *  through to readJobCache as a loose pre-filter (migration 0005) so
+ *  the per-company cap inside the RPC applies to relevant candidates,
+ *  not an arbitrary sample — confirmed live, without this a query like
+ *  "intern" could return zero cache results for a company that has
+ *  real intern postings cached, just because none landed in an
+ *  unfiltered top-N sample. Only wired for the four sources
+ *  refreshJobCache.ts actually populates;
  *  Amazon/Oracle/Workday (Python-backed, no refresh job yet — see that
  *  file's header) skip the cache check entirely rather than pay a lookup
  *  that can never hit.
@@ -447,9 +454,11 @@ async function maybeCached(
   source: JobSource,
   companySlugs: string[],
   label: string,
+  query: string,
   live: () => Promise<{ jobs: SearchJob[]; source: SourceResult }>,
 ): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
-  const cached = await readJobCache(root, { source, companySlugs, query: "" });
+  const titleWords = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const cached = await readJobCache(root, { source, companySlugs, query: "", titleWords });
   if (cached) return { jobs: cached, source: { state: "ready", count: cached.length } };
   return withDeadline(live(), label);
 }
@@ -467,10 +476,10 @@ export async function searchJobs(
   const greenhouseSlugs = isOn("greenhouse") ? configured(targets.greenhouse_company_slugs) : [];
   const smartrecruitersSlugs = isOn("smartrecruiters") ? configured(targets.smartrecruiters_company_slugs) : [];
   const [ashby, lever, greenhouse, smartrecruiters, amazon, oracle, workday] = await Promise.all([
-    maybeCached(root, "ashbyhq", ashbySlugs, "Ashby", () => fetchAshby(ashbySlugs)),
-    maybeCached(root, "lever", leverSlugs, "Lever", () => fetchLever(leverSlugs)),
-    maybeCached(root, "greenhouse", greenhouseSlugs, "Greenhouse", () => fetchGreenhouse(greenhouseSlugs)),
-    maybeCached(root, "smartrecruiters", smartrecruitersSlugs, "SmartRecruiters", () => fetchSmartRecruiters(smartrecruitersSlugs, query)),
+    maybeCached(root, "ashbyhq", ashbySlugs, "Ashby", query, () => fetchAshby(ashbySlugs)),
+    maybeCached(root, "lever", leverSlugs, "Lever", query, () => fetchLever(leverSlugs)),
+    maybeCached(root, "greenhouse", greenhouseSlugs, "Greenhouse", query, () => fetchGreenhouse(greenhouseSlugs)),
+    maybeCached(root, "smartrecruiters", smartrecruitersSlugs, "SmartRecruiters", query, () => fetchSmartRecruiters(smartrecruitersSlugs, query)),
     isOn("amazon") ? withDeadline(fetchAmazon(root, query, pageSize), "Amazon") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),
     isOn("oracle") ? withDeadline(fetchOracle(root, query, pageSize), "Oracle") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),
     isOn("workday") ? withDeadline(fetchWorkday(root, query, pageSize), "Workday") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),

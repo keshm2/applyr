@@ -35,6 +35,20 @@ export interface JobCacheLookup {
    *  SmartRecruiters all support a full, unfiltered board fetch — see
    *  refreshJobCache.ts, which is what populates rows under query=''). */
   query: string;
+  /** The user's actual search words (lowercased), used as a loose
+   *  ILIKE pre-filter inside the job_cache_search RPC (migration 0005)
+   *  — applied BEFORE the per-company cap, not after. Without this, a
+   *  narrow query like "intern" could come back with zero cache
+   *  results for a company that has real intern postings cached,
+   *  simply because none of them happened to land in an arbitrary
+   *  unfiltered top-N sample (confirmed live). Empty/omitted disables
+   *  filtering (matches PER_COMPANY_LIMIT's default browse-everything
+   *  behavior). Deliberately loose (plain substring, not the
+   *  inflection-aware matching titleMatchesQuery does) — that function
+   *  still runs afterward on the merged result set and is the
+   *  authoritative filter; this only has to be loose enough not to
+   *  exclude a real match before that ever sees it. */
+  titleWords?: string[];
 }
 
 interface JobCacheRow {
@@ -87,6 +101,7 @@ export async function readJobCache(root: string, lookup: JobCacheLookup): Promis
         p_company_slugs: lookup.companySlugs,
         p_query: lookup.query,
         p_per_company_limit: PER_COMPANY_LIMIT,
+        p_title_words: lookup.titleWords ?? [],
       }),
     });
     if (!response.ok) return undefined;
