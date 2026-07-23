@@ -12,17 +12,23 @@
  * the legacy service_role JWT; authorizes via the same service_role
  * Postgres role and still sets BYPASSRLS, so it bypasses RLS identically.
  * This is the only thing in the whole codebase that should ever hold
- * that key; it must never reach config/supabase.json, a client bundle,
- * or any file that gets committed):
+ * that key; it must never reach config/job_cache_supabase.json, a
+ * client bundle, or any file that gets committed):
  *
  *   SUPABASE_SECRET_KEY=sb_secret_... node packages/core/dist/refreshJobCache.js
  *
- * Locally, the project URL comes from config/supabase.json (same file
- * the desktop app reads). In CI (.github/workflows/refresh-job-cache.yml,
- * scheduled every 90 minutes — under job_cache's 2h TTL) that file
- * doesn't exist on a fresh checkout, so SUPABASE_URL is read as a direct
- * override first — not secret, just the project's own URL, stored as a
- * plain repo secret alongside SUPABASE_SECRET_KEY for convenience.
+ * Locally, the project URL comes from config/job_cache_supabase.json —
+ * its own project, deliberately separate from config/supabase.json
+ * (hosted auth/profile sync). Split apart 2026-07-23: the two workloads
+ * were sharing one project's disk I/O budget, and job_cache's own write
+ * volume (~14k rows across 47 companies, refreshed hourly) pushed it
+ * toward the free-tier limit, producing Cloudflare 522s on unrelated
+ * requests. See supabaseConfig.ts's readJobCacheSupabaseConfig for the
+ * full reasoning. In CI (.github/workflows/refresh-job-cache.yml, hourly
+ * — under job_cache's 2h TTL) that file doesn't exist on a fresh
+ * checkout, so SUPABASE_URL is read as a direct override first — not
+ * secret, just the project's own URL, stored as a plain repo secret
+ * alongside SUPABASE_SECRET_KEY for convenience.
  *
  * Refreshes the four sources that support a full, unfiltered board fetch
  * — Ashby, Lever, Greenhouse, SmartRecruiters — using
@@ -45,7 +51,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { findProjectRoot } from "./project.js";
-import { readSupabaseConfig } from "./supabaseConfig.js";
+import { readJobCacheSupabaseConfig } from "./supabaseConfig.js";
 import { configured, fetchAshby, fetchLever, fetchGreenhouse, fetchSmartRecruiters } from "./jobs.js";
 import type { SearchJob, JobSource } from "./jobsSort.js";
 
@@ -206,7 +212,7 @@ async function main(): Promise<void> {
   // SUPABASE_URL overrides config/supabase.json when set (CI has no such
   // file on a fresh checkout — see this file's header). Locally, neither
   // set, falls back to the same config file the desktop app reads.
-  const url = process.env.SUPABASE_URL || readSupabaseConfig(root)?.url;
+  const url = process.env.SUPABASE_URL || readJobCacheSupabaseConfig(root)?.url;
   if (!url) {
     console.error("Neither SUPABASE_URL nor a configured config/supabase.json was found — nothing to refresh against.");
     process.exit(1);

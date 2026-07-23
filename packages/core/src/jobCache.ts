@@ -1,4 +1,4 @@
-import { readSupabaseConfig } from "./supabaseConfig.js";
+import { readJobCacheSupabaseConfig } from "./supabaseConfig.js";
 import type { JobSource, SearchJob } from "./jobsSort.js";
 
 // Cache lookups must never make a search feel slower than today. Tuned
@@ -57,15 +57,18 @@ interface JobCacheRow {
  * rows regardless of sign-in state, since postings aren't personal data.
  *
  * Returns undefined — never throws — whenever the cache isn't usable for
- * any reason: no config/supabase.json on this install, unreachable,
- * slow, or genuinely empty. Every caller treats undefined as "fall back
- * to the existing live fetch," exactly as if this function didn't exist.
- * A cache MISS is not evidence of zero jobs — an empty resultset must
- * never be returned as "here are the results," only as "try live."
+ * any reason: no config/job_cache_supabase.json on this install,
+ * unreachable, slow, or genuinely empty. Every caller treats undefined as
+ * "fall back to the existing live fetch," exactly as if this function
+ * didn't exist. A cache MISS is not evidence of zero jobs — an empty
+ * resultset must never be returned as "here are the results," only as
+ * "try live." Deliberately its own config, separate from
+ * config/supabase.json (hosted auth) — see supabaseConfig.ts's
+ * readJobCacheSupabaseConfig for why.
  */
 export async function readJobCache(root: string, lookup: JobCacheLookup): Promise<SearchJob[] | undefined> {
   if (lookup.companySlugs.length === 0) return undefined;
-  const config = readSupabaseConfig(root);
+  const config = readJobCacheSupabaseConfig(root);
   if (!config) return undefined;
 
   const controller = new AbortController();

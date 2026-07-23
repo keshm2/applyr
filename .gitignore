@@ -9,6 +9,12 @@
 # Phase 11: hosted Supabase backend — live project URL + anon key.
 /config/supabase.json
 
+# job_cache's own project — deliberately separate from the one above
+# (config/supabase.json is hosted auth/profile sync) so the two
+# workloads don't share one project's disk I/O budget. See
+# packages/core/src/supabaseConfig.ts's readJobCacheSupabaseConfig.
+/config/job_cache_supabase.json
+
 # Runtime state
 /data/applied_jobs.json
 /data/review_queue.json

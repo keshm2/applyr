@@ -15,9 +15,31 @@ export interface SupabaseConfig {
  * a "hosted mode isn't configured yet" state instead of crashing.
  */
 export function readSupabaseConfig(root: string): SupabaseConfig | undefined {
+  return readSupabaseConfigFile(root, "supabase.json");
+}
+
+/**
+ * Reads config/job_cache_supabase.json — a deliberately separate project
+ * from config/supabase.json's (hosted auth/profile sync). Split apart
+ * 2026-07-23 after the auth project's disk I/O usage climbed toward its
+ * free-tier limit (partly from job_cache's own write volume — ~14k rows
+ * across 47 companies, refreshed hourly) and started producing Cloudflare
+ * 522s on unrelated requests; the two workloads no longer share one
+ * project's resource ceiling. job_cache holds no personal data (see
+ * supabase/migrations/0003_job_cache.sql's RLS comment), so this project
+ * doesn't need to be the same one hosted auth uses — jobCache.ts and
+ * refreshJobCache.ts are the only callers, both entirely independent of
+ * the desktop app's SupabaseAdapter/auth flow, which still reads
+ * readSupabaseConfig() above unchanged.
+ */
+export function readJobCacheSupabaseConfig(root: string): SupabaseConfig | undefined {
+  return readSupabaseConfigFile(root, "job_cache_supabase.json");
+}
+
+function readSupabaseConfigFile(root: string, filename: string): SupabaseConfig | undefined {
   try {
     const parsed = JSON.parse(
-      fs.readFileSync(path.join(root, "config", "supabase.json"), "utf8"),
+      fs.readFileSync(path.join(root, "config", filename), "utf8"),
     ) as Partial<SupabaseConfig>;
     const url = (parsed.url ?? "").trim();
     const anonKey = (parsed.anonKey ?? "").trim();
