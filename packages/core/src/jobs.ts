@@ -6,6 +6,7 @@ import { py } from "./platform.js";
 import { effectiveEnv, readTargetsArrayList } from "./settings.js";
 import { sortByPreferredThenPosted, titleMatchesQuery } from "./jobsSort.js";
 import type { JobSource, SearchJob } from "./jobsSort.js";
+import { readJobCache } from "./jobCache.js";
 
 export * from "./jobsSort.js";
 
@@ -85,7 +86,7 @@ export interface FitResult {
   reasoning: string;
 }
 
-interface Targets {
+export interface Targets {
   ashby_company_slugs?: string[];
   lever_company_slugs?: string[];
   greenhouse_company_slugs?: string[];
@@ -100,7 +101,7 @@ interface CanonicalJob extends SearchJob {
   internship_term?: string;
 }
 
-function configured(values: string[] | undefined): string[] {
+export function configured(values: string[] | undefined): string[] {
   return (values ?? []).filter((value) => value && value !== "REPLACE_ME");
 }
 
@@ -118,7 +119,7 @@ function webUrl(value: unknown): string {
   }
 }
 
-async function readTargets(root: string): Promise<Targets> {
+export async function readTargets(root: string): Promise<Targets> {
   return JSON.parse(await fs.readFile(path.join(root, "config", "targets.json"), "utf8")) as Targets;
 }
 
@@ -163,7 +164,7 @@ function sourceSummary(total: number, failedSlugs: string[], count: number): Sou
   return { state: "ready", count };
 }
 
-async function fetchAshby(slugs: string[]): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
+export async function fetchAshby(slugs: string[]): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
   const results = await Promise.allSettled(
     slugs.map(async (slug) => {
       const payload = (await fetchJson(
@@ -192,7 +193,7 @@ async function fetchAshby(slugs: string[]): Promise<{ jobs: SearchJob[]; source:
   return { jobs, source: sourceSummary(slugs.length, failedSlugs, jobs.length) };
 }
 
-async function fetchLever(slugs: string[]): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
+export async function fetchLever(slugs: string[]): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
   const results = await Promise.allSettled(
     slugs.map(async (slug) => {
       const payload = (await fetchJson(
@@ -222,7 +223,7 @@ async function fetchLever(slugs: string[]): Promise<{ jobs: SearchJob[]; source:
   return { jobs, source: sourceSummary(slugs.length, failedSlugs, jobs.length) };
 }
 
-async function fetchGreenhouse(slugs: string[]): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
+export async function fetchGreenhouse(slugs: string[]): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
   const results = await Promise.allSettled(
     slugs.map(async (slug) => {
       const payload = (await fetchJson(
@@ -299,7 +300,7 @@ async function fetchSmartRecruitersCompany(slug: string, query: string): Promise
   return jobs;
 }
 
-async function fetchSmartRecruiters(slugs: string[], query: string): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
+export async function fetchSmartRecruiters(slugs: string[], query: string): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
   const results = await Promise.allSettled(slugs.map((slug) => fetchSmartRecruitersCompany(slug, query)));
   const jobs = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
   const failedSlugs = slugs.filter((_, i) => results[i].status === "rejected");
@@ -414,6 +415,27 @@ async function fetchOracle(root: string, query: string, pageSize: number): Promi
 
 const DISABLED_SOURCE: SourceResult = { state: "skipped", count: 0, detail: "disabled" };
 
+/** Checks the shared job_cache table before falling back to a live
+ *  per-source fetch (see jobCache.ts). Cache rows are always populated
+ *  under query='' (refreshJobCache.ts stores the full unfiltered board,
+ *  same shape Ashby/Lever/Greenhouse/SmartRecruiters already fetch live)
+ *  — query-string matching happens downstream, on the merged result set,
+ *  via titleMatchesQuery, exactly the same for a cached or a live job.
+ *  Only wired for the four sources refreshJobCache.ts actually populates;
+ *  Amazon/Oracle/Workday (Python-backed, no refresh job yet — see that
+ *  file's header) skip the cache check entirely rather than pay a lookup
+ *  that can never hit. */
+async function maybeCached(
+  root: string,
+  source: JobSource,
+  companySlugs: string[],
+  live: () => Promise<{ jobs: SearchJob[]; source: SourceResult }>,
+): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
+  const cached = await readJobCache(root, { source, companySlugs, query: "" });
+  if (cached) return { jobs: cached, source: { state: "ready", count: cached.length } };
+  return live();
+}
+
 export async function searchJobs(
   root: string,
   query: string,
@@ -427,10 +449,10 @@ export async function searchJobs(
   const greenhouseSlugs = isOn("greenhouse") ? configured(targets.greenhouse_company_slugs) : [];
   const smartrecruitersSlugs = isOn("smartrecruiters") ? configured(targets.smartrecruiters_company_slugs) : [];
   const [ashby, lever, greenhouse, smartrecruiters, amazon, oracle, workday] = await Promise.all([
-    withDeadline(fetchAshby(ashbySlugs), "Ashby"),
-    withDeadline(fetchLever(leverSlugs), "Lever"),
-    withDeadline(fetchGreenhouse(greenhouseSlugs), "Greenhouse"),
-    withDeadline(fetchSmartRecruiters(smartrecruitersSlugs, query), "SmartRecruiters"),
+    withDeadline(maybeCached(root, "ashbyhq", ashbySlugs, () => fetchAshby(ashbySlugs)), "Ashby"),
+    withDeadline(maybeCached(root, "lever", leverSlugs, () => fetchLever(leverSlugs)), "Lever"),
+    withDeadline(maybeCached(root, "greenhouse", greenhouseSlugs, () => fetchGreenhouse(greenhouseSlugs)), "Greenhouse"),
+    withDeadline(maybeCached(root, "smartrecruiters", smartrecruitersSlugs, () => fetchSmartRecruiters(smartrecruitersSlugs, query)), "SmartRecruiters"),
     isOn("amazon") ? withDeadline(fetchAmazon(root, query, pageSize), "Amazon") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),
     isOn("oracle") ? withDeadline(fetchOracle(root, query, pageSize), "Oracle") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),
     isOn("workday") ? withDeadline(fetchWorkday(root, query, pageSize), "Workday") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),

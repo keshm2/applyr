@@ -1,0 +1,42 @@
+# Populates the shared Supabase job_cache table on a schedule (see
+# packages/core/src/refreshJobCache.ts for what this actually does and
+# why) so searchJobs()'s cache checks (packages/core/src/jobCache.ts)
+# have fresh data to hit instead of always falling back to a live
+# per-source fetch. job_cache rows expire 2h after being written
+# (supabase/migrations/0003_job_cache.sql's default); 90 minutes keeps a
+# real margin under that so a slow/failed run doesn't let the cache go
+# fully stale before the next attempt.
+#
+# Needs two repository secrets: SUPABASE_URL (the project's own URL —
+# not sensitive, just stored alongside the other one for convenience)
+# and SUPABASE_SECRET_KEY (Project Settings → API Keys → Secret keys in
+# the Supabase dashboard — bypasses RLS; never printed, never written to
+# a file, only ever passed as an env var to the one process that needs
+# it). Company slugs to refresh come from the committed
+# config/job_cache_targets.json, not the gitignored, PII-bearing
+# config/targets.json.
+#
+# Hourly, not every 90 minutes — cron's minute field only spans 0-59, so
+# a literal */90 there silently collapses to "minute 0 of every hour"
+# instead of the intended 90-minute cadence. Hourly is still a full 1h
+# of margin under the 2h TTL, comfortably covering a missed or failed
+# run before the cache would actually go stale.
+name: refresh-job-cache
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build --workspace=@aplyx/core
+      - run: node packages/core/dist/refreshJobCache.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
