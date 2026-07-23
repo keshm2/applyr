@@ -90,25 +90,50 @@ function jobCacheRow(source: JobSource, slug: string, query: string, job: Search
   };
 }
 
+// A single source's rows can be huge — measured live, 20 greenhouse
+// companies (spacex/databricks/etc.) produced 8,201 rows and a 75MB JSON
+// body in one shot, which is almost certainly what actually hung a real
+// CI run rather than erroring: a request that size either exceeds
+// Supabase's gateway payload limit outright, or is just slow enough
+// upserting 8,000+ rows with conflict resolution in one transaction to
+// look indistinguishable from hung. Chunking keeps each request small
+// and bounded, and gives per-chunk progress instead of one long silence.
+const UPSERT_CHUNK_SIZE = 200;
+const UPSERT_TIMEOUT_MS = 30_000;
+
+async function upsertChunk(url: string, secretKey: string, rows: ReturnType<typeof jobCacheRow>[]): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSERT_TIMEOUT_MS);
+  try {
+    // apikey + an *identical* Authorization: Bearer value — the new key
+    // format (secret or publishable) is rejected in Authorization unless
+    // it exactly matches apikey (see Supabase's API keys docs); this is
+    // the one header shape that's valid for both the new secret key and
+    // the legacy service_role JWT, so it works either way.
+    const response = await fetch(`${url}/rest/v1/job_cache?on_conflict=source,company_slug,query,job_key`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        apikey: secretKey,
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify(rows),
+    });
+    if (!response.ok) {
+      throw new Error(`job_cache upsert failed: HTTP ${response.status} — ${await response.text()}`);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function upsert(url: string, secretKey: string, rows: ReturnType<typeof jobCacheRow>[]): Promise<void> {
-  if (rows.length === 0) return;
-  // apikey + an *identical* Authorization: Bearer value — the new key
-  // format (secret or publishable) is rejected in Authorization unless
-  // it exactly matches apikey (see Supabase's API keys docs); this is
-  // the one header shape that's valid for both the new secret key and
-  // the legacy service_role JWT, so it works either way.
-  const response = await fetch(`${url}/rest/v1/job_cache?on_conflict=source,company_slug,query,job_key`, {
-    method: "POST",
-    headers: {
-      apikey: secretKey,
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=minimal",
-    },
-    body: JSON.stringify(rows),
-  });
-  if (!response.ok) {
-    throw new Error(`job_cache upsert failed: HTTP ${response.status} — ${await response.text()}`);
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE);
+    await upsertChunk(url, secretKey, chunk);
+    console.log(`  ...upserted ${Math.min(i + UPSERT_CHUNK_SIZE, rows.length)}/${rows.length}`);
   }
 }
 

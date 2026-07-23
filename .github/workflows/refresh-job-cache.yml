@@ -29,6 +29,12 @@ on:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    # A real run (47 companies, chunked upserts) should finish in a few
+    # minutes — this is a safety cap, not the expected runtime. Without
+    # it, a genuine hang (like the unchunked-upsert one this workflow
+    # hit before refreshJobCache.ts batched requests) burns CI minutes
+    # for hours instead of failing fast.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
