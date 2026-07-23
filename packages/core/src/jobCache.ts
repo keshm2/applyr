@@ -1,13 +1,16 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { readJobCacheSupabaseConfig } from "./supabaseConfig.js";
 import type { JobSource, SearchJob } from "./jobsSort.js";
 
 // Cache lookups must never make a search feel slower than today. Tuned
 // against the live table: a full 4-source, ~35-company concurrent batch
-// measured 232-655ms at PER_COMPANY_LIMIT=10 (jd_text is the dominant
-// per-row cost — see PER_COMPANY_LIMIT's comment), with real margin
-// below this budget. If a lookup doesn't come back within it, falling
-// through to the existing live fetch (its own, longer per-source budget
-// — see SOURCE_DEADLINE_MS in jobs.ts) is always the safer failure mode.
+// measured 232-655ms unfiltered (jd_text is the dominant per-row cost —
+// see UNFILTERED_PER_COMPANY_LIMIT/FILTERED_PER_COMPANY_LIMIT below),
+// with real margin below this budget. If a lookup doesn't come back
+// within it, falling through to the existing live fetch (its own,
+// longer per-source budget — see SOURCE_DEADLINE_MS in jobs.ts) is
+// always the safer failure mode.
 const CACHE_LOOKUP_TIMEOUT_MS = 1200;
 
 // Per company, not overall. Capping per company (via the job_cache_search
@@ -16,17 +19,31 @@ const CACHE_LOOKUP_TIMEOUT_MS = 1200;
 // combined, which in practice let 1-2 companies fill the whole cap and
 // left every other configured company with zero results even though
 // real cached rows existed for them (see migration 0004's header).
-// 10 was picked empirically, not from first principles: measured live at
-// 10/15/25/40 across all four sources, and 10 was the last value with
-// consistently fast (sub-second), non-spiky latency — 15 already showed
-// occasional 2s spikes. jd_text (full description text, required so
-// checkJobFit() works on cache-derived Ashby/Lever/Greenhouse/
-// SmartRecruiters jobs without a live refetch) is what makes row count
-// this expensive; trimming it was ruled out for that reason, not
-// attempted here. 10 per company still comfortably covers
-// jobs.ts's MAX_PAGE_SIZE (75) once merged across a typical 5-13
-// companies per source and query-matched downstream.
-const PER_COMPANY_LIMIT = 10;
+//
+// Two different limits, not one — measured live, they have very
+// different cost profiles now that the RPC pre-filters by title
+// (migration 0005) before applying either cap:
+// - UNFILTERED_PER_COMPANY_LIMIT (browsing, no search query typed):
+//   10, picked empirically — measured live at 10/15/25/40 across all
+//   four sources, and 10 was the last value with consistently fast
+//   (sub-second), non-spiky latency; 15 already showed occasional 2s
+//   spikes. jd_text (full description text, required so checkJobFit()
+//   works on cache-derived jobs without a live refetch) is what makes
+//   row count this expensive with nothing narrowing the row set first.
+// - FILTERED_PER_COMPANY_LIMIT (a real search query, so titleWords is
+//   non-empty): the ILIKE pre-filter already narrows each company down
+//   to plausibly-relevant rows before this cap ever applies, so a much
+//   higher cap costs almost nothing — measured live, raising a
+//   pre-filtered query from 10 to 75 went 77ms -> 103ms. Confirmed live
+//   this mattered: a real "software engineer intern" search had 19
+//   matching rows sitting past the old shared 10-cap for one source
+//   alone, silently excluded even though the RPC had already filtered
+//   down to genuine candidates.
+// Matches jobs.ts's MAX_PAGE_SIZE — a merged, deduped, final result
+// page can never exceed that regardless of source, so there's no
+// value in capping any single company past it.
+const UNFILTERED_PER_COMPANY_LIMIT = 10;
+const FILTERED_PER_COMPANY_LIMIT = 75;
 
 export interface JobCacheLookup {
   source: JobSource;
@@ -42,8 +59,8 @@ export interface JobCacheLookup {
    *  results for a company that has real intern postings cached,
    *  simply because none of them happened to land in an arbitrary
    *  unfiltered top-N sample (confirmed live). Empty/omitted disables
-   *  filtering (matches PER_COMPANY_LIMIT's default browse-everything
-   *  behavior). Deliberately loose (plain substring, not the
+   *  filtering (the browse-everything case — also switches to the
+   *  lower UNFILTERED_PER_COMPANY_LIMIT). Deliberately loose (plain substring, not the
    *  inflection-aware matching titleMatchesQuery does) — that function
    *  still runs afterward on the merged result set and is the
    *  authoritative filter; this only has to be loose enough not to
@@ -85,6 +102,9 @@ export async function readJobCache(root: string, lookup: JobCacheLookup): Promis
   const config = readJobCacheSupabaseConfig(root);
   if (!config) return undefined;
 
+  const titleWords = lookup.titleWords ?? [];
+  const perCompanyLimit = titleWords.length > 0 ? FILTERED_PER_COMPANY_LIMIT : UNFILTERED_PER_COMPANY_LIMIT;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CACHE_LOOKUP_TIMEOUT_MS);
   try {
@@ -100,8 +120,8 @@ export async function readJobCache(root: string, lookup: JobCacheLookup): Promis
         p_source: lookup.source,
         p_company_slugs: lookup.companySlugs,
         p_query: lookup.query,
-        p_per_company_limit: PER_COMPANY_LIMIT,
-        p_title_words: lookup.titleWords ?? [],
+        p_per_company_limit: perCompanyLimit,
+        p_title_words: titleWords,
       }),
     });
     if (!response.ok) return undefined;
@@ -122,5 +142,47 @@ export async function readJobCache(root: string, lookup: JobCacheLookup): Promis
     return undefined;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+const CACHE_SOURCE_KEY: Partial<Record<JobSource, string>> = {
+  ashbyhq: "ashby_company_slugs",
+  lever: "lever_company_slugs",
+  greenhouse: "greenhouse_company_slugs",
+  smartrecruiters: "smartrecruiters_company_slugs",
+};
+
+/**
+ * Which of a user's own configured company slugs (config/targets.json,
+ * per-user, not this file) are actually covered by the shared cache
+ * (config/job_cache_targets.json, committed, the same 47-ish companies
+ * for every install). These are two independent lists — a personal
+ * install's targets are never the same set as the shared cache's, so
+ * the overlap is often partial.
+ *
+ * This function exists to fix a real bug found live: readJobCache()
+ * doing one combined lookup across a source's full slug list treated
+ * ANY non-empty result as a full cache hit, silently never live-fetching
+ * whichever of the user's companies simply weren't in the shared cache
+ * at all (confirmed live: as low as 0% overlap on some sources) — every
+ * search was quietly missing most of a user's own configured companies.
+ * Callers (jobs.ts's maybeCached) use this to split a source's slugs
+ * into a cache-eligible subset and a live-only subset that always gets
+ * live-fetched regardless of the cache outcome.
+ *
+ * Never throws — a missing/unreadable file just means nothing is
+ * cache-eligible, which safely forces every company to live-fetch
+ * rather than silently dropping any of them.
+ */
+export async function cacheEligibleSlugs(root: string, source: JobSource, requested: string[]): Promise<Set<string>> {
+  const key = CACHE_SOURCE_KEY[source];
+  if (!key || requested.length === 0) return new Set();
+  try {
+    const raw = await fs.readFile(path.join(root, "config", "job_cache_targets.json"), "utf8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const cachedSlugs = new Set((parsed[key] as string[] | undefined) ?? []);
+    return new Set(requested.filter((slug) => cachedSlugs.has(slug)));
+  } catch {
+    return new Set();
   }
 }
