@@ -98,7 +98,23 @@ function jobCacheRow(source: JobSource, slug: string, query: string, job: Search
 // upserting 8,000+ rows with conflict resolution in one transaction to
 // look indistinguishable from hung. Chunking keeps each request small
 // and bounded, and gives per-chunk progress instead of one long silence.
-const UPSERT_CHUNK_SIZE = 200;
+//
+// Dropped further, 200 -> 50, after the operator's Supabase project
+// reported disk I/O nearing its usage limit (free tier: 0.5 CPU/1GB —
+// this checkout's earlier migrations, the original manual refresh, and
+// four retried CI attempts this session all added up). A 522
+// "connection timed out" at the Cloudflare layer, on requests as cheap
+// as a single-row SELECT, fits I/O-starved Postgres becoming
+// unresponsive to new connections better than a payload-size problem —
+// smaller chunks alone don't fix that (same total bytes written either
+// way); UPSERT_INTER_CHUNK_DELAY_MS below is what actually matters,
+// spreading writes out over time instead of shrinking them.
+const UPSERT_CHUNK_SIZE = 50;
+// Applied between every chunk, not just on retry — the point is
+// spreading write pressure out over time so Postgres gets room to
+// flush/checkpoint between transactions, not just making individual
+// requests smaller.
+const UPSERT_INTER_CHUNK_DELAY_MS = 1_500;
 // The first real CI run aborted on the very first 200-row chunk (~1.8MB)
 // at the old 30s timeout, before any progress had even been logged —
 // most likely a slow/transient path from a fresh GitHub-hosted runner
@@ -171,6 +187,9 @@ async function upsert(url: string, secretKey: string, rows: ReturnType<typeof jo
     console.log(`  upserting chunk ${chunkNum}/${totalChunks} (${chunk.length} rows)...`);
     await upsertChunk(url, secretKey, chunk);
     console.log(`  ...upserted ${Math.min(i + UPSERT_CHUNK_SIZE, rows.length)}/${rows.length}`);
+    if (i + UPSERT_CHUNK_SIZE < rows.length) {
+      await new Promise((resolve) => setTimeout(resolve, UPSERT_INTER_CHUNK_DELAY_MS));
+    }
   }
 }
 
