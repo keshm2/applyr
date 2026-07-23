@@ -24,7 +24,7 @@
   },
   "scripts": {
     "build": "tsc && npm run bundle",
-    "bundle": "esbuild dist/cli.js --bundle --platform=node --format=esm --outfile=dist/cli.js --allow-overwrite --external:ink --external:react",
+    "bundle": "esbuild dist/cli.js --bundle --platform=node --format=esm --outfile=dist/cli.js --allow-overwrite --external:ink --external:react && chmod +x dist/cli.js",
     "typecheck": "tsc --noEmit",
     "smoke": "node dist/cli.js status"
   },

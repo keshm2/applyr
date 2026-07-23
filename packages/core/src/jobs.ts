@@ -424,16 +424,34 @@ const DISABLED_SOURCE: SourceResult = { state: "skipped", count: 0, detail: "dis
  *  Only wired for the four sources refreshJobCache.ts actually populates;
  *  Amazon/Oracle/Workday (Python-backed, no refresh job yet — see that
  *  file's header) skip the cache check entirely rather than pay a lookup
- *  that can never hit. */
+ *  that can never hit.
+ *
+ *  withDeadline is applied here, around live() only — NOT around the
+ *  whole function via the call site (as it briefly was) — deliberately.
+ *  Wrapping the whole thing in one shared SOURCE_DEADLINE_MS meant a
+ *  slow cache lookup (readJobCache's own internal timeout is up to
+ *  CACHE_LOOKUP_TIMEOUT_MS, currently 1200ms) could eat most of that
+ *  budget before falling through, leaving the live fallback well under
+ *  a second to complete a real API call it normally gets ~2.2s for.
+ *  Confirmed live: this silently starved Ashby/Lever/Greenhouse/
+ *  SmartRecruiters down to near-zero results on a slow cache round trip
+ *  while Amazon/Oracle/Workday (never wired into caching, so unaffected)
+ *  kept working normally — search looked like "only Amazon shows up."
+ *  Giving live() its own fresh deadline here means a cache check can
+ *  never cost the live fallback any of its normal time budget, at the
+ *  cost of a higher combined worst case (cache timeout + full live
+ *  timeout, additive, if both are slow) — correctness over the tighter
+ *  bound. */
 async function maybeCached(
   root: string,
   source: JobSource,
   companySlugs: string[],
+  label: string,
   live: () => Promise<{ jobs: SearchJob[]; source: SourceResult }>,
 ): Promise<{ jobs: SearchJob[]; source: SourceResult }> {
   const cached = await readJobCache(root, { source, companySlugs, query: "" });
   if (cached) return { jobs: cached, source: { state: "ready", count: cached.length } };
-  return live();
+  return withDeadline(live(), label);
 }
 
 export async function searchJobs(
@@ -449,10 +467,10 @@ export async function searchJobs(
   const greenhouseSlugs = isOn("greenhouse") ? configured(targets.greenhouse_company_slugs) : [];
   const smartrecruitersSlugs = isOn("smartrecruiters") ? configured(targets.smartrecruiters_company_slugs) : [];
   const [ashby, lever, greenhouse, smartrecruiters, amazon, oracle, workday] = await Promise.all([
-    withDeadline(maybeCached(root, "ashbyhq", ashbySlugs, () => fetchAshby(ashbySlugs)), "Ashby"),
-    withDeadline(maybeCached(root, "lever", leverSlugs, () => fetchLever(leverSlugs)), "Lever"),
-    withDeadline(maybeCached(root, "greenhouse", greenhouseSlugs, () => fetchGreenhouse(greenhouseSlugs)), "Greenhouse"),
-    withDeadline(maybeCached(root, "smartrecruiters", smartrecruitersSlugs, () => fetchSmartRecruiters(smartrecruitersSlugs, query)), "SmartRecruiters"),
+    maybeCached(root, "ashbyhq", ashbySlugs, "Ashby", () => fetchAshby(ashbySlugs)),
+    maybeCached(root, "lever", leverSlugs, "Lever", () => fetchLever(leverSlugs)),
+    maybeCached(root, "greenhouse", greenhouseSlugs, "Greenhouse", () => fetchGreenhouse(greenhouseSlugs)),
+    maybeCached(root, "smartrecruiters", smartrecruitersSlugs, "SmartRecruiters", () => fetchSmartRecruiters(smartrecruitersSlugs, query)),
     isOn("amazon") ? withDeadline(fetchAmazon(root, query, pageSize), "Amazon") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),
     isOn("oracle") ? withDeadline(fetchOracle(root, query, pageSize), "Oracle") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),
     isOn("workday") ? withDeadline(fetchWorkday(root, query, pageSize), "Workday") : Promise.resolve({ jobs: [], source: DISABLED_SOURCE }),
