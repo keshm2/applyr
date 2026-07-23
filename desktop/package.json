@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm --prefix .. run build:core",
     "build": "tsc && vite build",
+    "pretypecheck": "npm --prefix .. run build:core",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri"
