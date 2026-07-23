@@ -97,6 +97,31 @@ interface JobCacheRow {
  * config/supabase.json (hosted auth) — see supabaseConfig.ts's
  * readJobCacheSupabaseConfig for why.
  */
+// jobsSort.ts's termMatchesTitle (the real, authoritative matcher) does
+// BIDIRECTIONAL prefix matching for words >=4 chars: word.startsWith(term)
+// OR term.startsWith(word). A plain `title ILIKE '%term%'` only catches
+// the first direction — if a query word is a longer *extension* of a
+// title word (query "engineering" against a title that says "Engineer"),
+// the literal term never appears as a substring in the title at all, so
+// ILIKE incorrectly excludes a match the real filter would accept.
+// Confirmed live: "software engineering intern" returned 0 from Ashby's
+// cache while "software engineer intern" correctly returned 4 — the only
+// difference was that one extra "-ing".
+//
+// Truncating each word to its own first MIN_PREFIX_LEN characters before
+// building the ILIKE pattern closes this: any title word sharing that
+// same prefix will contain it as a literal substring regardless of which
+// word is longer, so both directions of the real matcher's prefix check
+// are covered. Words shorter than MIN_PREFIX_LEN are left whole — the
+// real matcher only exact-matches those (no prefix leniency below the
+// threshold), and ILIKE on the full short word is already a safe (loose,
+// never under-inclusive) superset of an exact-match requirement.
+const MIN_PREFIX_LEN = 4;
+
+function looseTitleFilterWords(titleWords: string[]): string[] {
+  return titleWords.map((word) => (word.length >= MIN_PREFIX_LEN ? word.slice(0, MIN_PREFIX_LEN) : word));
+}
+
 export async function readJobCache(root: string, lookup: JobCacheLookup): Promise<SearchJob[] | undefined> {
   if (lookup.companySlugs.length === 0) return undefined;
   const config = readJobCacheSupabaseConfig(root);
@@ -121,7 +146,7 @@ export async function readJobCache(root: string, lookup: JobCacheLookup): Promis
         p_company_slugs: lookup.companySlugs,
         p_query: lookup.query,
         p_per_company_limit: perCompanyLimit,
-        p_title_words: titleWords,
+        p_title_words: looseTitleFilterWords(titleWords),
       }),
     });
     if (!response.ok) return undefined;
