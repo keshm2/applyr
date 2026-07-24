@@ -8,7 +8,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-6);
+  /* Extra top clearance so the brand mark isn't under the macOS traffic
+   * lights — the native title bar is transparent and reserves no space
+   * of its own anymore (see .app-drag-region in base.css). */
+  padding: 2.75rem var(--space-6) var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 

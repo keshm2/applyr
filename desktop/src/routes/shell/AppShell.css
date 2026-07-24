@@ -5,12 +5,31 @@
 }
 
 .shell-sidebar {
-  border-right: 1px solid var(--border);
+  position: relative;
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  padding: var(--space-5) var(--space-4);
+  /* Extra top clearance (vs. the space-5 every other side gets) so the
+   * brand mark isn't sitting under the macOS traffic lights — the native
+   * title bar is transparent (tauri.conf.json) and reserves no space of
+   * its own anymore. */
+  padding: 2.75rem var(--space-4) var(--space-5);
   gap: var(--space-6);
+}
+
+/* A plain border-right would run the full height of this grid cell,
+ * starting at y=0 under the transparent title bar — crossing straight
+ * through .app-drag-region's own horizontal border and looking like a
+ * stray line poking above it. Positioned to start exactly where the drag
+ * bar ends instead, so the two lines meet cleanly rather than intersect. */
+.shell-sidebar::after {
+  content: "";
+  position: absolute;
+  top: 2rem;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
 }
 
 .shell-brand {

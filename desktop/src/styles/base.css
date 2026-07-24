@@ -132,3 +132,22 @@ a {
   background: var(--accent-soft);
   color: var(--text);
 }
+
+/* Native title bar is transparent (tauri.conf.json) so the page's own
+ * --ground background shows straight through instead of the OS's default
+ * gray chrome — it already recolors with theme/mode, no extra syncing
+ * needed. This invisible strip is what makes the window draggable from
+ * anywhere along the top, since removing the native title bar also
+ * removes the OS's built-in drag handling. No background of its own —
+ * purely a hit-target, layered above everything. Screens with top-anchored
+ * content (the app shell sidebar, the wizard header) add extra top
+ * padding so nothing sits underneath the macOS traffic lights. */
+.app-drag-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2rem;
+  z-index: 9999;
+  border-bottom: 1px solid var(--border);
+}

@@ -130,7 +130,7 @@ export function HomeScreen() {
 
   return (
     <div style={{ maxWidth: "44rem", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
-      <div>
+      <div className="aplyx-fade-in" style={{ textAlign: "center" }}>
         <h1 style={{ fontSize: "var(--text-3xl)", marginBottom: "var(--space-2)" }}>
           {local?.applied?.length ? "Welcome back" : "You're set up"}
         </h1>

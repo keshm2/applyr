@@ -1,9 +1,19 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type MouseEvent } from "react";
 import { HashRouter, Routes, Route } from "react-router-dom";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AuthProvider } from "./lib/AuthContext";
 import { EntryScreen } from "./routes/EntryScreen";
 import { Logo } from "./components/Logo";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+
+// Tauri's auto-injected data-tauri-drag-region listener and this explicit
+// handler both call the same gated `core:window:allow-start-dragging`
+// command (capabilities/default.json) — kept explicit here rather than
+// relying solely on the injected script.
+function handleDragMouseDown(e: MouseEvent) {
+  if (e.button !== 0) return;
+  void getCurrentWindow().startDragging();
+}
 
 // Route-level code splitting: a fresh launch only ever needs EntryScreen
 // first, but every other route (both onboarding wizards, the entire app
@@ -32,6 +42,7 @@ function App() {
   return (
     <AuthProvider>
       <HashRouter>
+        <div className="app-drag-region" data-tauri-drag-region="" onMouseDown={handleDragMouseDown} />
         <ErrorBoundary>
           <Suspense fallback={<RouteLoading />}>
             <Routes>

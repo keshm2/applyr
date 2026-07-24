@@ -1,122 +1,86 @@
-# Release notes — aplyx 0.9.8a
+# Release notes — aplyx 0.9.85a
 
-> **Build:** `0.9.8a` — alpha.
+> **Build:** `0.9.85a` — alpha.
 > **Branch:** `main`.
 > **TUI in-app marker:** `packages/core/src/version.ts` →
-> `BUILD_MARKER = "0.9.8a"` (re-exported from `app/src/theme.ts`,
+> `BUILD_MARKER = "0.9.85a"` (re-exported from `app/src/theme.ts`,
 > visible in the TUI side-panel footer, and also in the desktop app's
 > Settings screen — one shared constant, both surfaces agree).
-> **npm package:** `@keshm/aplyx` version `0.9.8-alpha.0`, published to
+> **npm package:** `@keshm/aplyx` version `0.9.85-alpha.0`, published to
 > the default `latest` dist-tag — `npm install -g @keshm/aplyx` gets it.
 > The unscoped npm name `aplyx` belongs to an unrelated package — never
 > `npm install aplyx`. If a re-publish is ever needed for this same
 > build, the npm semver bumps to `alpha.1`/`alpha.2` while the
-> human-facing build marker/git tag stay `0.9.8a`.
+> human-facing build marker/git tag stay `0.9.85a`.
 > **Rollout:** clients on the updater lineage self-update on their next
 > scheduled run or `aplyx` launch; older installs update manually once
 > (`bash scripts/install/update.sh` / `powershell scripts\install\
 > update.ps1`).
 > **Desktop app:** 0.1.0 internally (Tauri app version, not tied to the
-> TUI's release cadence).
+> TUI's release cadence) — this release is desktop-only.
 > **Browser extension:** unchanged in this build — `0.8.2` / `0.8.2a`.
-> **Previous releases:** `0.9.75a`, `0.9.7a`, `0.9.1a`, `0.9.0a`,
-> `0.8.43a`, `0.8.42a`, `0.8.041a`, `0.8.4a`, `0.8.3a`, `0.8.2a`,
-> `0.7.8a`, and `0.5.5a` — deep-dive notes live at this path under
-> their git tags; the index is [`CHANGELOG.md`](./CHANGELOG.md).
+> **Previous releases:** `0.9.8a`, `0.9.75a`, `0.9.7a`, `0.9.1a`,
+> `0.9.0a`, `0.8.43a`, `0.8.42a`, `0.8.041a`, `0.8.4a`, `0.8.3a`,
+> `0.8.2a`, `0.7.8a`, and `0.5.5a` — deep-dive notes live at this path
+> under their git tags; the index is [`CHANGELOG.md`](./CHANGELOG.md).
 
-## What's new in 0.9.8a
+## What's new in 0.9.85a
 
-This is a big one: a new shared job-postings cache backing search for
-both UIs, a string of search-correctness fixes found while chasing
-that work, pagination, and a desktop UI polish pass (smoother
-transitions, a real dashboard, and a Profile settings screen).
+Desktop-only: a full logo rebrand, a native-feeling window chrome, a
+real Google/email sign-in bug fix, and a couple of small polish items.
 
-### Shared job-postings cache (new backend)
+### Logo rebrand
 
-Job search used to hit each company's live ATS API (Ashby/Lever/
-Greenhouse/SmartRecruiters/Amazon/Oracle/Workday) directly on every
-query — slow, and rate-limit-fragile. There's now a shared Supabase
-`job_cache` table (public read, ~47 curated companies) refreshed
-hourly by a new GitHub Actions workflow, with a per-company-capped
-Postgres RPC (`job_cache_search`) so one high-volume company can't
-starve the rest of a query's row budget — chunked upserts, retry
-backoff, and I/O pacing tuned against Supabase free-tier limits
-(`supabase/migrations/0003-0005`, `packages/core/src/jobCache.ts`,
-`refreshJobCache.ts`, `.github/workflows/refresh-job-cache.yml`).
-Auth/account storage stays on a separate Supabase project from the
-job cache, decoupled so cache write volume can't affect account data.
+Replaced the old tile-grid lowercase "a" mark with a new gradient badge
+holding a white "AX" monogram, based on an operator-supplied reference
+image. The reference's exact pixels are used verbatim — its badge
+region was isolated programmatically (bounding-box detection + a flood
+fill from the crop edges to clear only the background, not the white
+monogram) rather than hand-traced, so it's a pixel-accurate match, not
+an approximation. One source image now drives both the in-app mark
+(`desktop/src/components/Logo.tsx`) and the actual macOS/Windows/Linux
+app icon set (`npx tauri icon`, regenerated for every platform
+including iOS/Android assets that ship in the repo for future use);
+the icon-generation source additionally composites the badge onto a
+transparent canvas at ~84% fill, matching the margin convention real
+macOS app icons bake into their own source art — previously the badge
+filled its canvas edge to edge, which read as oversized next to other
+Dock icons.
 
-### Search correctness fixes
+### Native window chrome (macOS)
 
-Found and fixed while verifying the cache work, each confirmed live
-against real queries:
+The desktop window previously used the OS's default opaque title bar —
+a gray strip uncorrelated with the app's own theme. It's now
+`titleBarStyle: "Overlay"` (`tauri.conf.json`): the traffic-light
+buttons float over the app's own content, whose background already
+recolors with theme/mode, so the "title bar" now just reads as the top
+of the app rather than a separate strip. Dragging the window from that
+area required both a custom drag region (`data-tauri-drag-region` +
+an explicit `getCurrentWindow().startDragging()` call, since Tauri's
+auto-injected drag listener wasn't reliably triggering inside this
+app's WKWebView) and — the actual root cause of it working only
+intermittently — granting `core:window:allow-start-dragging` in
+`capabilities/default.json`, which Tauri's permission system was
+silently denying. A subtle themed border line marks where the
+draggable strip ends; the app shell's sidebar divider no longer runs
+through that line (it now starts exactly where the drag bar ends
+instead of crossing it, a stray-looking artifact once the badge
+started reaching all the way to the top of the window).
 
-- **Amazon dominated results, other sources rarely appeared.** A
-  shared per-source deadline meant one slow source could starve the
-  others out of a merged result set; deadlines are now decoupled per
-  source.
-- **Results were silently truncated below the configured page size**
-  after the cache/pagination changes (`DEFAULT_PAGE_SIZE`/
-  `MAX_PAGE_SIZE` raised, with live-source fetch limits for Amazon/
-  Oracle/Workday decoupled from `pageSize` so raising it didn't
-  regress those three).
-- **A cache pre-filter bug excluded valid prefix matches** — "software
-  engineering intern" and "software engineer intern" returned very
-  different result counts for what should have been near-equivalent
-  queries; root-caused to a bidirectional prefix-match bug in title
-  filtering, fixed with one-directional prefix truncation
-  (`looseTitleFilterWords()`).
-- **The biggest one: search never actually covered the shared cache's
-  full company list** — it only ever searched the user's own
-  personally-configured targets, silently missing every company that
-  was only present in the shared cache (e.g. SpaceX had real postings
-  that never surfaced). `sharedCacheSlugs()` now returns the full
-  shared list and search unions it with the user's personal targets.
-- Cache silently dropped personally-configured companies not present
-  in the shared list; narrow queries (e.g. "intern") returned
-  near-zero results due to an overly tight per-company cap — both
-  fixed with a conditional cap (tighter unfiltered, looser filtered).
+### Fixed
 
-### Pagination (both UIs)
-
-Jobs search results are now paginated instead of dumping everything
-into one list — defaults to 25 per page, user-configurable.
-Desktop (`JobsScreen.tsx`): dropdown control, localStorage-persisted.
-TUI (`SearchScreen.tsx`): `[`/`]` page keys, new `APLYX_RESULTS_PER_PAGE`
-Settings field. The "preferred locations only" filter was taken
-offline temporarily (desktop) while this landed — the underlying
-search still covers the whole US either way.
-
-### Desktop UI polish
-
-- **Smoother route transitions.** Removed a redundant double-animation
-  (every screen was fading itself in on top of the shell's own route
-  transition); fixed an `onAnimationEnd` bug where a bubbled child
-  animation event could end the route transition early or race a
-  later one; added a safety-net timeout so the transition state
-  machine can't get stuck; all six route chunks now prefetch shortly
-  after the shell mounts so the first visit to a tab doesn't pop in
-  un-animated while its chunk downloads.
-- **Home is a fuller dashboard.** Added a "Recent activity" feed —
-  applied jobs and pending review items merged into one
-  reverse-chronological list — alongside the existing stat cards and
-  next-action card.
-- **New Profile settings page.** Every field from the onboarding
-  wizard (all 8 pages — Basics, Contact, Location, Profiles, Work
-  eligibility, Education, Demographics, Roles, Job targets) is now
-  editable from Settings → Profile without re-running setup
-  (`desktop/src/routes/shell/ProfileScreen.tsx`, reusing the existing
-  `FieldInput`/`readProfileField`/`writeProfileField` plumbing).
-- **Added a top-level error boundary.** The app previously had none —
-  any uncaught render error anywhere unmounted the whole tree with no
-  recovery. Found this the hard way: the new Recent-activity feed
-  read a field (`date_applied`) that older `review_queue.json` entries
-  don't have (they predate a field rename to `date_added`), which
-  threw during sort and looked like the app hanging on the loading
-  logo after "Run locally." Fixed the missing-field crash and added
-  `ErrorBoundary` so any future render error shows a recoverable
-  "Something went wrong / Reload" screen instead of an unrecoverable
-  blank window.
+- **Google sign-in (and email-confirmation links) silently failed to
+  complete** — the deep-link handler passed the entire
+  `aplyx://auth-callback?code=...` URL to
+  `supabase.auth.exchangeCodeForSession()`, which expects only the bare
+  PKCE code. The exchange failed server-side with no visible error, so
+  completing a real, successful Google auth just landed back on the
+  sign-in screen with nothing to show why. Now extracts the `code`
+  query parameter first, and logs any exchange error instead of
+  discarding it silently.
+- Home dashboard's "Welcome back" / sign-in status line is now centered
+  and fades in with the rest of the dashboard, instead of being the one
+  static, left-aligned element on the page.
 
 ## Install / update / uninstall
 
@@ -143,56 +107,54 @@ Windows: `powershell -ExecutionPolicy Bypass -File scripts\install\install.ps1`
 
 ## Verification
 
-- `tsc --noEmit` clean across `@aplyx/core`, `app`, and `desktop`.
-- Search fixes verified live against real queries (not just unit-level)
-  at each step — Amazon-domination, truncation, prefix-filter, and
-  search-scope fixes were each reproduced first, then confirmed fixed
-  against the live cache/API.
-- Pagination verified live in both UIs — desktop via a browser-driven
-  dev server, TUI via a real `tmux` session.
-- Desktop UI polish verified live: route transitions clicked through
-  all six tabs with zero console errors and no stuck transition state;
-  the Recent-activity crash was reproduced against this machine's real
-  `data/review_queue.json`, fixed, and re-verified in the rebuilt
-  installed app.
+- `tsc --noEmit` clean across `@aplyx/core` and `desktop`.
+- The permission-gate root cause for intermittent dragging was found by
+  searching Tauri's own GitHub issues after ruling out CSS/JS causes via
+  a live, instrumented build (a pure-CSS `:active` hit-test to confirm
+  clicks were reaching the drag region, then devtools console logging
+  around the `startDragging()` call) — not guessed.
+- The logo crop was verified against the reference image with an actual
+  side-by-side rendered comparison (not memory) before being applied,
+  through several iterations until the proportions matched; the final
+  version uses the reference's own pixels directly rather than a
+  re-drawn approximation.
 - `npm run tauri build` produced a clean macOS release bundle; installed
-  to `/Applications/aplyx.app`, launched, and confirmed running.
-- Not exercised this pass: Linux/Windows desktop builds (unchanged from
-  prior verification — see Known gaps).
+  to `/Applications/aplyx.app`, launched, and confirmed running — window
+  dragging, theme-matched title bar, and the new icon all verified live
+  in the installed app, not just the dev server.
+- Not exercised this pass: Linux/Windows desktop builds, and the TUI
+  itself, since this release doesn't touch TUI code.
 
 ## Release artifacts
 
-- Git tag `v0.9.8a` on `main`.
-- npm: `@keshm/aplyx@0.9.8-alpha.0` under the `latest` dist-tag
+- Git tag `v0.9.85a` on `main`.
+- npm: `@keshm/aplyx@0.9.85-alpha.0` under the `latest` dist-tag
   (`cd app && npm publish` — `publishConfig` sets `access: public` and
   the tag). Publish requires `npm login`.
 - CI workflow `.github/workflows/tui.yml` runs on every push touching
   the TUI/core. `.github/workflows/desktop-release.yml` builds and
   attaches desktop app bundles to a tagged release (triggered on `v*`
   tag pushes, or manually via `workflow_dispatch` for an existing tag).
-  `.github/workflows/refresh-job-cache.yml` refreshes the shared job
-  cache hourly (new this release).
 
 ## Known gaps
 
 - Desktop app: the CI-built Linux and Windows bundles install correctly
   per the asset-matching logic but haven't been re-verified on real
-  Linux/Windows hardware since 0.9.7a — only macOS was verified live
-  this pass too.
+  Linux/Windows hardware — only macOS was verified live this pass.
+  `titleBarStyle: "Overlay"` and the custom drag region are macOS-
+  specific changes; Windows/Linux window chrome is unaffected (they
+  never had this problem — only macOS's native title bar was the
+  mismatched-gray-strip issue).
 - Desktop app: hosted↔local pipeline-state sync doesn't exist yet —
   `SupabaseAdapter.loadState()` returns `undefined`.
 - Hosted sign-up email delivery depends on the operator configuring
-  custom SMTP (Supabase's built-in mailer is rate-limited/unreliable) —
-  not yet done on the live project.
-- Google OAuth sign-in needs a Google Cloud OAuth client configured in
-  the Supabase dashboard — not yet done on the live project.
+  custom SMTP — done on the live project this pass (Resend, verified
+  live), but Google OAuth's Cloud Console app is still in "Testing"
+  publishing status (only allow-listed test accounts can sign in) —
+  publishing it to production is a future step, not done here.
 - Codex / Copilot live conformance runs still pending a machine with
   those CLIs.
 - Workday remains review-only by design.
-- The "preferred locations only" filter is offline on desktop (see
-  above) — pending a redesign now that pagination has landed.
-- Current cache-covered internship inventory is genuinely sparse for
-  some queries this time of year (verified by forensic tracing, not a
-  bug) — the curated company list (`config/job_cache_targets.json`)
-  could be expanded toward internship-heavy employers in a future
-  build.
+- The "preferred locations only" filter is still offline on desktop,
+  pending a redesign now that pagination has landed (unchanged from
+  0.9.8a).

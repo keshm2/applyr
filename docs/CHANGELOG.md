@@ -7,6 +7,40 @@ but trimmed to fit a small in-repo doc.
 > Per-`docs/RELEASE.md` is the canonical, deep-dive release
 > document for each tagged build. This file is the index.
 
+## [0.9.85a] — 2026-07-24
+
+npm package: `@keshm/aplyx` version `0.9.85-alpha.0`. Full notes:
+[`RELEASE.md`](./RELEASE.md).
+
+### Added
+
+- **Logo rebrand.** Replaced the old tile-grid lowercase "a" mark with a
+  new gradient badge holding a white "AX" monogram, based on an
+  operator-supplied reference image — used verbatim (isolated from its
+  background programmatically, not hand-traced) for both the in-app
+  mark and the full macOS/Windows/Linux app icon set, with proper
+  icon-canvas margin matching real macOS app icons instead of filling
+  the canvas edge to edge.
+- **Desktop: native-feeling macOS window chrome.** The title bar is now
+  an overlay over the app's own themed background instead of the OS's
+  default gray strip, draggable via a themed border-lined strip at the
+  top of the window.
+
+### Fixed
+
+- **Google sign-in (and email-confirmation links) silently failed** —
+  the deep-link handler passed the whole callback URL to Supabase's
+  code-exchange call instead of just the auth code, so a successful
+  Google auth just bounced back to the sign-in screen with no visible
+  error.
+- **Desktop window dragging worked only intermittently** — root cause
+  was Tauri's permission system silently denying the drag command;
+  fixed by granting `core:window:allow-start-dragging` explicitly.
+- Desktop: the app shell's sidebar divider ran straight through the new
+  title bar's border line instead of stopping at it.
+- Desktop: Home dashboard's "Welcome back" / sign-in status line is now
+  centered and fades in with the rest of the dashboard.
+
 ## [0.9.8a] — 2026-07-23
 
 npm package: `@keshm/aplyx` version `0.9.8-alpha.0`. Full notes:

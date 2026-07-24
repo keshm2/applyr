@@ -143,7 +143,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unlisten = onOpenUrl(async (urls) => {
       const url = urls.find((u) => u.startsWith(AUTH_CALLBACK_URL));
       if (!url) return;
-      await client.auth.exchangeCodeForSession(url);
+      // exchangeCodeForSession wants the bare PKCE auth code, not the full
+      // callback URL — it's sent as-is to Supabase's token endpoint, so
+      // passing the whole "aplyx://auth-callback?code=..." string here
+      // silently fails the exchange (invalid code) with no visible error,
+      // leaving status stuck on "signed-out" after a real, successful
+      // Google/email confirmation.
+      const code = new URL(url).searchParams.get("code");
+      if (!code) return;
+      const { error } = await client.auth.exchangeCodeForSession(code);
+      if (error) console.error("Failed to complete sign-in", error);
     });
     return () => {
       unlisten.then((fn) => fn());
